@@ -20,6 +20,15 @@ import { useStore } from '../../store/useStore';
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 const VIDEO_HEIGHT = screenHeight - 60;
 
+// Ukuran video dipaksa 9:16, dipusatkan di dalam container (letterbox kalau perlu)
+const VIDEO_ASPECT_RATIO = 9 / 16; // width / height
+let VIDEO_BOX_WIDTH = screenWidth;
+let VIDEO_BOX_HEIGHT = VIDEO_BOX_WIDTH / VIDEO_ASPECT_RATIO;
+if (VIDEO_BOX_HEIGHT > VIDEO_HEIGHT) {
+  VIDEO_BOX_HEIGHT = VIDEO_HEIGHT;
+  VIDEO_BOX_WIDTH = VIDEO_BOX_HEIGHT * VIDEO_ASPECT_RATIO;
+}
+
 // Komponen per item video
 const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave }: any) => {
   const [isPaused, setIsPaused] = useState(false);
@@ -81,7 +90,7 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
           <VideoView
             player={player}
             style={styles.video}
-            contentFit="contain"
+            contentFit="cover"
             nativeControls={false}
           />
           {/* Pause indicator */}
@@ -171,6 +180,17 @@ export default function VideoFeedScreen({ navigation }: any) {
   const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
   const followingKey = currentUser?.following?.join(',') || '';
 
+  // Ref untuk likedPosts & following supaya fetchVideos TIDAK ikut berubah identitas
+  // setiap kali user like/unlike (itu penyebab bug "blank ke atas").
+  const likedPostsRef = useRef<string[]>(currentUser?.likedPosts || []);
+  const followingRef = useRef<string[]>(currentUser?.following || []);
+  useEffect(() => {
+    likedPostsRef.current = currentUser?.likedPosts || [];
+  }, [currentUser?.likedPosts]);
+  useEffect(() => {
+    followingRef.current = currentUser?.following || [];
+  }, [followingKey]);
+
   // Stop video saat pindah screen
   useFocusEffect(
     useCallback(() => {
@@ -192,15 +212,16 @@ export default function VideoFeedScreen({ navigation }: any) {
         limit(20)
       );
       const snap = await getDocs(q);
-      const likedPosts = currentUser?.likedPosts || [];
+      const likedPosts = likedPostsRef.current;
+      const following = followingRef.current;
       const allVideos: any[] = snap.docs.map(d => ({
         id: d.id,
         ...d.data(),
         isLiked: likedPosts.includes(d.id),
         isSaved: false,
       }));
-      const filteredVideos = feedMode === 'following' && currentUser?.following?.length
-        ? allVideos.filter((video) => video.userId && currentUser.following.includes(video.userId))
+      const filteredVideos = feedMode === 'following' && following.length
+        ? allVideos.filter((video) => video.userId && following.includes(video.userId))
         : allVideos;
       setVideos(filteredVideos);
     } catch (e) {
@@ -209,10 +230,18 @@ export default function VideoFeedScreen({ navigation }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentUser?.uid, currentUser?.likedPosts, followingKey, feedMode]);
+    // Sengaja TIDAK menaruh currentUser?.likedPosts / followingKey di sini,
+    // supaya like/unlike tidak memicu fetch ulang seluruh list.
+  }, [currentUser?.uid, feedMode]);
 
   const handleLike = useCallback(async (postId: string, isLiked: boolean) => {
     if (!currentUser?.uid) return;
+    // Update UI dulu (optimistic) biar responsif, tanpa nge-refetch apa pun.
+    setVideos(prev => prev.map(v =>
+      v.id === postId
+        ? { ...v, isLiked: !isLiked, likesCount: (v.likesCount || 0) + (isLiked ? -1 : 1) }
+        : v
+    ));
     try {
       await updateDoc(doc(db, 'posts', postId), {
         likesCount: increment(isLiked ? -1 : 1)
@@ -225,12 +254,15 @@ export default function VideoFeedScreen({ navigation }: any) {
           ? (currentUser.likedPosts || []).filter((id) => id !== postId)
           : [...(currentUser.likedPosts || []), postId]
       });
+    } catch (e) {
+      console.log(e);
+      // Rollback kalau gagal
       setVideos(prev => prev.map(v =>
         v.id === postId
-          ? { ...v, isLiked: !isLiked, likesCount: (v.likesCount || 0) + (isLiked ? -1 : 1) }
+          ? { ...v, isLiked, likesCount: (v.likesCount || 0) + (isLiked ? 1 : -1) }
           : v
       ));
-    } catch (e) { console.log(e); }
+    }
   }, [currentUser?.uid, currentUser?.likedPosts, updateCurrentUser]);
 
   const handleSave = useCallback(async (mediaURL: string, postId: string) => {
@@ -288,6 +320,8 @@ export default function VideoFeedScreen({ navigation }: any) {
     }
   }, [commentText, currentUser, selectedPostId]);
 
+  // fetchVideos sekarang hanya berubah identitas saat uid atau feedMode berubah,
+  // jadi effect ini tidak lagi ke-trigger oleh aksi like.
   useEffect(() => { fetchVideos(); }, [fetchVideos]);
 
   const onViewableItemsChanged = useCallback(
@@ -300,7 +334,7 @@ export default function VideoFeedScreen({ navigation }: any) {
 
   const renderVideoItem = useCallback(({ item, index }: { item: any; index: number }) => {
     const shouldRender = index === activeIndex || index === activeIndex - 1 || index === activeIndex + 1;
-    const isLikedByUser = currentUser?.likedPosts?.includes(item.id) ?? item.isLiked;
+    const isLikedByUser = item.isLiked;
 
     if (!shouldRender) {
       return <View style={[styles.hiddenVideoItem, { height: VIDEO_HEIGHT, width: screenWidth }]} />;
@@ -317,7 +351,7 @@ export default function VideoFeedScreen({ navigation }: any) {
         onSave={handleSave}
       />
     );
-  }, [activeIndex, isFocused, handleLike, openComments, handleSave, currentUser?.likedPosts, VIDEO_HEIGHT, screenWidth]);
+  }, [activeIndex, isFocused, handleLike, openComments, handleSave]);
 
   if (loading) {
     return (
@@ -343,14 +377,6 @@ export default function VideoFeedScreen({ navigation }: any) {
     );
   }
 
-  if (loading && videos.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E91E63" />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <StatusBar hidden />
@@ -372,7 +398,7 @@ export default function VideoFeedScreen({ navigation }: any) {
         data={videos}
         keyExtractor={(item) => `video-${item.id}`}
         renderItem={renderVideoItem}
-        extraData={[activeIndex, currentUser?.likedPosts?.join(',') || '']}
+        extraData={activeIndex}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -480,11 +506,11 @@ const styles = StyleSheet.create({
   emptySubLabel: { color: '#888', fontSize: 14, marginBottom: 24 },
   uploadBtn: { backgroundColor: '#E91E63', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
   uploadBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  videoContainer: { width: screenWidth, height: VIDEO_HEIGHT, backgroundColor: '#000', overflow: 'hidden' },
-  videoWrapper: { width: screenWidth, height: VIDEO_HEIGHT, justifyContent: 'center', backgroundColor: '#000' },
-  video: { width: screenWidth, height: VIDEO_HEIGHT },
+  videoContainer: { width: screenWidth, height: VIDEO_HEIGHT, backgroundColor: '#000', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  videoWrapper: { width: VIDEO_BOX_WIDTH, height: VIDEO_BOX_HEIGHT, justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden' },
+  video: { width: VIDEO_BOX_WIDTH, height: VIDEO_BOX_HEIGHT },
   pauseOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
-  noVideo: { width: screenWidth, height: VIDEO_HEIGHT, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  noVideo: { width: VIDEO_BOX_WIDTH, height: VIDEO_BOX_HEIGHT, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
   noVideoText: { fontSize: 80 },
   progressBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.2)' },
   progressBarFill: { height: 3, backgroundColor: '#E91E63' },

@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   RefreshControl, ActivityIndicator, Image,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Alert
+  Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
+  ViewToken,
 } from 'react-native';
 import {
   collection, query, orderBy, limit, getDocs,
@@ -10,11 +11,130 @@ import {
   startAfter, QueryDocumentSnapshot, arrayUnion, arrayRemove
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { useIsFocused } from '@react-navigation/native';
 import { db } from '../../utils/firebase';
 import { useStore } from '../../store/useStore';
 import AudioPlayer from '../../components/AudioPlayer';
 
 const POSTS_PER_PAGE = 10; // Batasi 10 post per load biar ga OOM
+
+// ----- Post item dipisah jadi komponen sendiri + memo, biar video lain ga ikut re-render -----
+const PostItem = memo(function PostItem({
+  item,
+  isLikedByUser,
+  isActive,
+  isMuted,
+  onToggleMute,
+  onOpenUserProfile,
+  onOpenVideoFullscreen,
+  onLike,
+  onOpenComments,
+}: any) {
+  return (
+    <View style={styles.postCard}>
+      {/* Header */}
+      <TouchableOpacity style={styles.postHeader} onPress={onOpenUserProfile}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>
+            {item.userDisplayName?.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View>
+          <Text style={styles.username}>{item.userDisplayName}</Text>
+          <Text style={styles.postTime}>
+            {item.createdAt?.toDate?.()?.toLocaleDateString('id-ID') || ''}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Media */}
+      {item.mediaType === 'image' && item.mediaURL ? (
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: item.mediaURL }} style={styles.postImage} resizeMode="cover" />
+          {item.textOverlay ? (
+            <View style={[
+              styles.overlayContainer,
+              item.textPosition === 'top' ? styles.overlayTop :
+              item.textPosition === 'center' ? styles.overlayCenter :
+              styles.overlayBottom
+            ]}>
+              <Text style={[styles.overlayText, { color: item.textColor || '#fff' }]}>
+                {item.textOverlay}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : item.mediaType === 'video' && item.mediaURL ? (
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.videoContainer}
+          onPress={onToggleMute}
+        >
+          <Video
+            source={{ uri: item.mediaURL }}
+            style={styles.videoPlayer}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={isActive}
+            isLooping
+            isMuted={isMuted}
+            useNativeControls={false}
+          />
+
+          {/* Indikator play/pause halus saat tidak aktif */}
+          {!isActive && (
+            <View style={styles.videoPauseOverlay}>
+              <Ionicons name="play" size={40} color="rgba(255,255,255,0.85)" />
+            </View>
+          )}
+
+          {/* Toggle mute indicator */}
+          <View style={styles.muteIndicator}>
+            <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={16} color="#fff" />
+          </View>
+
+          {/* Tombol buka fullscreen */}
+          <TouchableOpacity
+            style={styles.fullscreenBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              onOpenVideoFullscreen();
+            }}
+          >
+            <Ionicons name="expand" size={16} color="#fff" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      ) : item.mediaType === 'audio' && item.mediaURL ? (
+        <AudioPlayer uri={item.mediaURL} caption={item.caption} />
+      ) : null}
+
+      {/* Actions */}
+      <View style={styles.postActions}>
+        <TouchableOpacity style={styles.actionBtn} onPress={onLike}>
+          <Ionicons
+            name={isLikedByUser ? 'heart' : 'heart-outline'}
+            size={24}
+            color={isLikedByUser ? '#E91E63' : '#fff'}
+          />
+          <Text style={styles.actionCount}>{item.likesCount || 0}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionBtn} onPress={onOpenComments}>
+          <Ionicons name="chatbubble-outline" size={22} color="#fff" />
+          <Text style={styles.actionCount}>{item.commentsCount || 0}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Caption */}
+      {item.caption ? (
+        <Text style={styles.caption}>
+          <Text style={styles.captionName}>{item.userDisplayName} </Text>
+          {item.caption}
+        </Text>
+      ) : null}
+    </View>
+  );
+});
 
 export default function FeedScreen({ navigation }: any) {
   const { posts, setPosts, currentUser, updateCurrentUser } = useStore();
@@ -31,6 +151,11 @@ export default function FeedScreen({ navigation }: any) {
   const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
   const followingKey = currentUser?.following?.join(',') || '';
   const likedPostsKey = currentUser?.likedPosts?.join(',') || '';
+
+  // ----- Autoplay / autopause state -----
+  const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(true); // default muted, ala TikTok/Reels
+  const isFocused = useIsFocused(); // pause semua video kalau screen ga lagi difokus
 
   const applyFeedMode = useCallback((items: any[]) => {
     if (feedMode === 'following' && currentUser?.following?.length) {
@@ -163,96 +288,48 @@ export default function FeedScreen({ navigation }: any) {
 
   useEffect(() => { fetchPosts(); }, [currentUser?.uid, followingKey, likedPostsKey, feedMode]);
 
+  // ----- Viewability: tentukan post mana yang lagi "aktif" (kelihatan) di layar -----
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 60, // dianggap aktif kalau minimal 60% post kelihatan
+    minimumViewTime: 150,
+  }).current;
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0) {
+        // ambil item paling atas yang kelihatan sebagai yang "aktif"
+        const topVisible = viewableItems[0];
+        setActivePostId(topVisible.item?.id ?? null);
+      } else {
+        setActivePostId(null);
+      }
+    }
+  ).current;
+
+  // Video hanya boleh play kalau: post-nya aktif di layar, screen lagi difokus,
+  // dan modal komentar sedang tidak terbuka (biar ga numpuk sama audio komentar)
+  const isPostActive = useCallback(
+    (postId: string) => postId === activePostId && isFocused && !commentModal,
+    [activePostId, isFocused, commentModal]
+  );
+
   const renderPost = useCallback(({ item }: any) => {
     const isLikedByUser = currentUser?.likedPosts?.includes(item.id) ?? item.isLiked;
 
     return (
-    <View style={styles.postCard}>
-      {/* Header */}
-      <TouchableOpacity
-        style={styles.postHeader}
-        onPress={() => navigation.navigate('UserProfile', { userId: item.userId })}
-      >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {item.userDisplayName?.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View>
-          <Text style={styles.username}>{item.userDisplayName}</Text>
-          <Text style={styles.postTime}>
-            {item.createdAt?.toDate?.()?.toLocaleDateString('id-ID') || ''}
-          </Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Media */}
-      {item.mediaType === 'image' && item.mediaURL ? (
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: item.mediaURL }}
-            style={styles.postImage}
-            resizeMode="cover"
-          />
-          {/* Text overlay di atas gambar */}
-          {item.textOverlay ? (
-            <View style={[
-              styles.overlayContainer,
-              item.textPosition === 'top' ? styles.overlayTop :
-              item.textPosition === 'center' ? styles.overlayCenter :
-              styles.overlayBottom
-            ]}>
-              <Text style={[styles.overlayText, { color: item.textColor || '#fff' }]}>
-                {item.textOverlay}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      ) : item.mediaType === 'video' && item.mediaURL ? (
-        <TouchableOpacity
-          style={styles.videoBox}
-          onPress={() => navigation.navigate('VideoPlayer', { videoUrl: item.mediaURL, item })}
-        >
-          <Ionicons name="play-circle" size={56} color="#E91E63" />
-          <Text style={styles.videoText}>Tap untuk putar video</Text>
-        </TouchableOpacity>
-      ) : item.mediaType === 'audio' && item.mediaURL ? (
-        <AudioPlayer uri={item.mediaURL} caption={item.caption} />
-      ) : null}
-
-      {/* Actions */}
-      <View style={styles.postActions}>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => handleLike(item.id, isLikedByUser)}
-        >
-          <Ionicons
-            name={isLikedByUser ? 'heart' : 'heart-outline'}
-            size={24}
-            color={isLikedByUser ? '#E91E63' : '#fff'}
-          />
-          <Text style={styles.actionCount}>{item.likesCount || 0}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => openComments(item.id)}
-        >
-          <Ionicons name="chatbubble-outline" size={22} color="#fff" />
-          <Text style={styles.actionCount}>{item.commentsCount || 0}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Caption */}
-      {item.caption ? (
-        <Text style={styles.caption}>
-          <Text style={styles.captionName}>{item.userDisplayName} </Text>
-          {item.caption}
-        </Text>
-      ) : null}
-    </View>
+      <PostItem
+        item={item}
+        isLikedByUser={isLikedByUser}
+        isActive={isPostActive(item.id)}
+        isMuted={isMuted}
+        onToggleMute={() => setIsMuted((m) => !m)}
+        onOpenUserProfile={() => navigation.navigate('UserProfile', { userId: item.userId })}
+        onOpenVideoFullscreen={() => navigation.navigate('VideoPlayer', { videoUrl: item.mediaURL, item })}
+        onLike={() => handleLike(item.id, item.isLiked ?? (currentUser?.likedPosts?.includes(item.id)))}
+        onOpenComments={() => openComments(item.id)}
+      />
     );
-  }, [posts, currentUser?.likedPosts]);
+  }, [posts, currentUser?.likedPosts, isPostActive, isMuted]);
 
   if (loading && posts.length === 0) {
     return (
@@ -300,6 +377,8 @@ export default function FeedScreen({ navigation }: any) {
         maxToRenderPerBatch={5}
         windowSize={5}
         initialNumToRender={5}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         ListFooterComponent={
           loadingMore ? <ActivityIndicator color="#E91E63" style={{ padding: 16 }} /> : null
         }
@@ -406,8 +485,23 @@ const styles = StyleSheet.create({
   overlayCenter: { top: '45%' },
   overlayBottom: { bottom: 16 },
   overlayText: { fontSize: 20, fontWeight: 'bold', textShadowColor: '#000', textShadowRadius: 6, textAlign: 'center' },
-  videoBox: { width: '100%', aspectRatio: 9/16, backgroundColor: '#111', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  videoText: { color: '#888', fontSize: 13 },
+  // Video 9:16, autoplay/pause
+  videoContainer: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#111', position: 'relative' },
+  videoPlayer: { width: '100%', height: '100%' },
+  videoPauseOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  muteIndicator: {
+    position: 'absolute', top: 10, right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 14,
+    width: 28, height: 28, justifyContent: 'center', alignItems: 'center',
+  },
+  fullscreenBtn: {
+    position: 'absolute', bottom: 10, right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 14,
+    width: 28, height: 28, justifyContent: 'center', alignItems: 'center',
+  },
   postActions: { flexDirection: 'row', padding: 12, gap: 20 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actionCount: { color: '#fff', fontSize: 14 },

@@ -171,8 +171,19 @@ export default function VideoFeedScreen({ navigation }: any) {
 
   useEffect(() => {
     const onChange = ({ window }: any) => setScreenSize(window);
-    Dimensions.addEventListener('change', onChange);
-    return () => Dimensions.removeEventListener('change', onChange);
+    // Support both old and new RN APIs for Dimensions event subscriptions
+    const subscription: any = (Dimensions as any).addEventListener
+      ? (Dimensions as any).addEventListener('change', onChange)
+      : null;
+    return () => {
+      // Newer RN: subscription has .remove()
+      if (subscription && typeof subscription.remove === 'function') {
+        subscription.remove();
+      // Older RN: fallback to removeEventListener if available
+      } else if (typeof (Dimensions as any).removeEventListener === 'function') {
+        (Dimensions as any).removeEventListener('change', onChange);
+      }
+    };
   }, []);
 
   // Use a consistent 9:16 video box ratio for the player
@@ -210,6 +221,7 @@ export default function VideoFeedScreen({ navigation }: any) {
   );
 
   const fetchVideos = useCallback(async (refresh = false) => {
+    const currentVisibleId = videos[activeIndex]?.id;
     if (refresh) setRefreshing(true);
     else setLoading(true);
     try {
@@ -240,6 +252,18 @@ export default function VideoFeedScreen({ navigation }: any) {
         filteredVideos = allVideos;
       }
       setVideos(filteredVideos);
+      // Try to preserve currently visible video after refresh to avoid jumpiness
+      if (refresh && currentVisibleId) {
+        const newIndex = filteredVideos.findIndex(v => v.id === currentVisibleId);
+        if (newIndex >= 0) {
+          setActiveIndex(newIndex);
+          try { listRef.current?.scrollToIndex({ index: newIndex, animated: false }); } catch (e) {}
+        } else {
+          // if current video disappeared, keep user near top
+          try { listRef.current?.scrollToIndex({ index: 0, animated: false }); } catch (e) {}
+          setActiveIndex(0);
+        }
+      }
     } catch (e) {
       console.log(e);
     } finally {
@@ -379,6 +403,15 @@ export default function VideoFeedScreen({ navigation }: any) {
       prevLengthRef.current = videos.length;
     }
   }, [videos]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('scrollToTop', () => {
+      if (listRef.current) {
+        try { listRef.current.scrollToOffset({ offset: 0, animated: true }); } catch (e) {}
+      }
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   // Pastikan snapping 1 video per layar: kalkulasi index saat momentum scroll selesai
   const onMomentumScrollEnd = useCallback((e: any) => {

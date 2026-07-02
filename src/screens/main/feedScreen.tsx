@@ -149,6 +149,7 @@ export default function FeedScreen({ navigation }: any) {
   const { posts, setPosts, currentUser, updateCurrentUser } = useStore();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const listRef = useRef<any>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -301,6 +302,15 @@ export default function FeedScreen({ navigation }: any) {
 
   useEffect(() => { fetchPosts(); }, [currentUser?.uid, followingKey, likedPostsKey, feedMode]);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('scrollToTop', () => {
+      if (listRef.current) {
+        listRef.current.scrollToOffset({ offset: 0, animated: true });
+      }
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   // Re-apply filter ke existing posts secara immediate saat feedMode berubah
   // (tanpa perlu tunggu fetchPosts selesai, untuk UX yang lebih smooth)
   useEffect(() => {
@@ -392,6 +402,7 @@ export default function FeedScreen({ navigation }: any) {
       </View>
 
       <FlatList
+        ref={listRef}
         data={posts}
         keyExtractor={(item) => item.id}
         renderItem={renderPost}

@@ -29,7 +29,7 @@ MediaNova adalah aplikasi social media berbasis React Native yang berfokus pada 
 | [Ananda Wirajaya] | [2410501111] | Frontend Dev |
 | [Kirana Fitria Utami] | [2410501117] | Backend Dev |
 | [Clara Ragil Dewanti] | [2410501116] | Media Specialist |
-| [Uhkti Zahra Isyana] | [2410501130] | QA / DevOps |
+| [Ukhti Zahra Isyana] | [2410501130] | QA / DevOps |
 
 ---
 

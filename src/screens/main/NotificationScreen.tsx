@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, StyleSheet,
-  TouchableOpacity, ActivityIndicator
+  TouchableOpacity, ActivityIndicator, RefreshControl
 } from 'react-native';
 import { collection, query, where, orderBy, limit, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ export default function NotificationScreen() {
   const { currentUser } = useStore();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
@@ -32,6 +33,7 @@ export default function NotificationScreen() {
       console.log(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -78,6 +80,17 @@ export default function NotificationScreen() {
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchNotifications();
+            }}
+            tintColor="#E91E63"
+            colors={['#E91E63']}
+          />
+        }
         renderItem={renderItem}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

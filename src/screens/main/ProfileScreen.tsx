@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, Switch, ActivityIndicator, Image, FlatList
+  ScrollView, Alert, Switch, ActivityIndicator, Image, FlatList, RefreshControl
 } from 'react-native';
 import { signOut } from 'firebase/auth';
 import {
-  doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment,
-  collection, query, where, orderBy, getDocs
+  doc, getDoc, updateDoc, addDoc, arrayUnion, arrayRemove, increment,
+  collection, query, where, orderBy, getDocs, serverTimestamp
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../utils/firebase';
@@ -19,6 +19,8 @@ export default function ProfileScreen({ route, navigation }: any) {
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [profileTab, setProfileTab] = useState<'posts' | 'videos'>('posts');
+  const [refreshing, setRefreshing] = useState(false);
+  const scrollRef = useRef<any>(null);
 
   const isOwnProfile = !route?.params?.userId ||
     route?.params?.userId === currentUser?.uid;
@@ -99,6 +101,14 @@ export default function ProfileScreen({ route, navigation }: any) {
           following: arrayUnion(targetUserId),
           followingCount: increment(1)
         });
+        await addDoc(collection(db, 'notifications'), {
+          type: 'follow',
+          message: `${currentUser.displayName || 'Seseorang'} mulai mengikuti kamu`,
+          toUserId: targetUserId,
+          fromUserId: currentUser.uid,
+          createdAt: serverTimestamp(),
+          isRead: false,
+        });
         updateCurrentUser({
           following: [...(currentUser.following || []), targetUserId],
           followingCount: (currentUser.followingCount || 0) + 1
@@ -115,6 +125,22 @@ export default function ProfileScreen({ route, navigation }: any) {
       setLoading(false);
     }
   };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchProfile(), fetchUserPosts()]);
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', () => {
+      if (navigation.isFocused()) {
+        onRefresh();
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+    });
+    return unsubscribe;
+  }, [navigation, onRefresh]);
 
   const handleLogout = async () => {
     Alert.alert('Logout', 'Yakin mau logout?', [
@@ -134,7 +160,18 @@ export default function ProfileScreen({ route, navigation }: any) {
   const subTextColor = isDarkMode ? '#888' : '#666';
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: bgColor }]}>
+    <ScrollView
+      ref={scrollRef}
+      style={[styles.container, { backgroundColor: bgColor }]}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#E91E63"
+          colors={["#E91E63"]}
+        />
+      }
+    >
       <View style={[styles.header, { backgroundColor: cardColor }]}>
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarText}>
@@ -151,19 +188,25 @@ export default function ProfileScreen({ route, navigation }: any) {
         ) : null}
 
         <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: textColor }]}>
+          <TouchableOpacity
+            style={styles.statItem}
+            onPress={() => navigation.navigate('FollowList', { userId: targetUserId, listType: 'followers' })}
+          >
+            <Text style={[styles.statNumber, { color: textColor }]}> 
               {profileData?.followersCount || 0}
             </Text>
             <Text style={[styles.statLabel, { color: subTextColor }]}>Followers</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: textColor }]}>
+          <TouchableOpacity
+            style={styles.statItem}
+            onPress={() => navigation.navigate('FollowList', { userId: targetUserId, listType: 'following' })}
+          >
+            <Text style={[styles.statNumber, { color: textColor }]}> 
               {profileData?.followingCount || 0}
             </Text>
             <Text style={[styles.statLabel, { color: subTextColor }]}>Following</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {!isOwnProfile && (

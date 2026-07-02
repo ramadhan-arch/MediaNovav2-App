@@ -22,6 +22,7 @@ import CreatePostScreen from './src/screens/main/CreatePostScreen';
 import ProfileScreen from './src/screens/main/ProfileScreen';
 import NotificationScreen from './src/screens/main/NotificationScreen';
 import UserProfileScreen from './src/screens/main/UserProfilScreen';
+import FollowListScreen from './src/screens/main/FollowListScreen';
 import VideoPlayerScreen from './src/screens/main/VideoPlayerScreen';
 import PostDetailScreen from './src/screens/main/PostDetailScreen';
 
@@ -70,6 +71,22 @@ function MainTabs() {
           return <Ionicons name="apps-outline" size={24} color={color} />;
         },
       })}
+      screenListeners={({ navigation, route }) => ({
+        tabPress: (e) => {
+          try {
+            const state = navigation?.getState && navigation.getState();
+            const focusedRoute = state?.routes?.[state.index];
+            if (focusedRoute?.name === route.name) {
+              if (navigation && typeof navigation.emit === 'function') {
+                navigation.emit({ type: 'scrollToTop' });
+              }
+            }
+          } catch (err) {
+            // defensive: avoid crashing when navigation API differs
+            console.warn('tabPress handler failed to emit scrollToTop', err);
+          }
+        },
+      })}
     >
       <Tab.Screen name="Feed" component={FeedScreen} options={{ tabBarLabel: 'Home' }} />
       <Tab.Screen name="VideoFeed" component={VideoFeedScreen} options={{ tabBarLabel: 'Video' }} />
@@ -88,6 +105,7 @@ function MainStack() {
       <Stack.Screen name="AudioRecord" component={AudioRecordScreen} />
       <Stack.Screen name="CameraFilter" component={CameraFilterScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+      <Stack.Screen name="FollowList" component={FollowListScreen} />
       <Stack.Screen name="VideoPlayer" component={VideoPlayerScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
     </Stack.Navigator>

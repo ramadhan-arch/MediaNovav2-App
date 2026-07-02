@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator, Image, FlatList, Alert
+  ScrollView, ActivityIndicator, Image, FlatList, Alert, RefreshControl
 } from 'react-native';
 import {
-  doc, getDoc, updateDoc, arrayUnion, arrayRemove,
-  increment, collection, query, where, orderBy, getDocs
+  doc, getDoc, updateDoc, addDoc, arrayUnion, arrayRemove,
+  increment, collection, query, where, orderBy, getDocs, serverTimestamp
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../utils/firebase';
@@ -19,6 +19,7 @@ export default function UserProfileScreen({ route, navigation }: any) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [profileTab, setProfileTab] = useState<'posts' | 'videos'>('posts');
 
   const isOwnProfile = userId === currentUser?.uid;
@@ -44,6 +45,7 @@ export default function UserProfileScreen({ route, navigation }: any) {
       console.log(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -65,6 +67,11 @@ export default function UserProfileScreen({ route, navigation }: any) {
     } catch (e) {
       console.log(e);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchProfile(), fetchUserPosts()]);
   };
 
   const handleFollow = async () => {
@@ -98,6 +105,14 @@ export default function UserProfileScreen({ route, navigation }: any) {
           following: arrayUnion(userId),
           followingCount: increment(1)
         });
+        await addDoc(collection(db, 'notifications'), {
+          type: 'follow',
+          message: `${currentUser.displayName || 'Seseorang'} mulai mengikuti kamu`,
+          toUserId: userId,
+          fromUserId: currentUser.uid,
+          createdAt: serverTimestamp(),
+          isRead: false,
+        });
         updateCurrentUser({
           following: [...(currentUser.following || []), userId],
           followingCount: (currentUser.followingCount || 0) + 1
@@ -124,7 +139,17 @@ export default function UserProfileScreen({ route, navigation }: any) {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#E91E63"
+          colors={['#E91E63']}
+        />
+      }
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -154,15 +179,21 @@ export default function UserProfileScreen({ route, navigation }: any) {
             <Text style={styles.statLabel}>Post</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+          <TouchableOpacity
+            style={styles.statItem}
+            onPress={() => navigation.navigate('FollowList', { userId, listType: 'followers' })}
+          >
             <Text style={styles.statNumber}>{profileData?.followersCount || 0}</Text>
             <Text style={styles.statLabel}>Followers</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+          <TouchableOpacity
+            style={styles.statItem}
+            onPress={() => navigation.navigate('FollowList', { userId, listType: 'following' })}
+          >
             <Text style={styles.statNumber}>{profileData?.followingCount || 0}</Text>
             <Text style={styles.statLabel}>Following</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {!isOwnProfile && (

@@ -228,9 +228,17 @@ export default function VideoFeedScreen({ navigation }: any) {
         isLiked: likedPosts.includes(d.id),
         isSaved: false,
       }));
-      const filteredVideos = feedMode === 'following' && following.length
-        ? allVideos.filter((video) => video.userId && following.includes(video.userId))
-        : allVideos;
+      let filteredVideos: any[] = [];
+      if (feedMode === 'following') {
+        // Jika following kosong, return array kosong (bukan semua videos)
+        if (!following.length) {
+          filteredVideos = [];
+        } else {
+          filteredVideos = allVideos.filter((video) => video.userId && following.includes(video.userId));
+        }
+      } else {
+        filteredVideos = allVideos;
+      }
       setVideos(filteredVideos);
     } catch (e) {
       console.log(e);
@@ -332,6 +340,24 @@ export default function VideoFeedScreen({ navigation }: any) {
   // jadi effect ini tidak lagi ke-trigger oleh aksi like.
   useEffect(() => { fetchVideos(); }, [fetchVideos]);
 
+  // Re-apply filter ke existing videos secara immediate saat feedMode berubah
+  // (tanpa perlu tunggu fetchVideos selesai, untuk UX yang lebih smooth)
+  useEffect(() => {
+    if (videos.length > 0) {
+      let filtered: any[] = [];
+      if (feedMode === 'following') {
+        if (!followingRef.current?.length) {
+          filtered = [];
+        } else {
+          filtered = videos.filter((video) => video.userId && followingRef.current.includes(video.userId));
+        }
+      } else {
+        filtered = videos;
+      }
+      setVideos(filtered);
+    }
+  }, [feedMode, followingKey]);
+
   // FlatList ref untuk kontrol scroll (dipakai saat ada upload baru)
   const listRef = useRef<any>(null);
   // Track previous first item to detect new uploads prepended
@@ -402,22 +428,6 @@ export default function VideoFeedScreen({ navigation }: any) {
     );
   }
 
-  if (videos.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>🎬</Text>
-        <Text style={styles.emptyLabel}>Belum ada video</Text>
-        <Text style={styles.emptySubLabel}>Upload video pertama kamu!</Text>
-        <TouchableOpacity
-          style={styles.uploadBtn}
-          onPress={() => navigation.navigate('CreatePost')}
-        >
-          <Text style={styles.uploadBtnText}>Upload Video</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <StatusBar hidden />
@@ -435,42 +445,68 @@ export default function VideoFeedScreen({ navigation }: any) {
           <Text style={[styles.modeTabText, feedMode === 'following' && styles.modeTabTextActive]}>Following</Text>
         </TouchableOpacity>
       </View>
-      <FlatList
-        ref={listRef}
-        data={videos}
-        keyExtractor={(item) => `video-${item.id}`}
-        renderItem={renderVideoItem}
-        extraData={activeIndex}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchVideos(true)}
-            tintColor="#E91E63"
-          />
-        }
-        style={styles.flatList}
-        contentContainerStyle={{ padding: 0 }}
-        pagingEnabled
-        snapToInterval={ITEM_HEIGHT}
-        snapToAlignment={'center'}
-        disableIntervalMomentum={true}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        onScrollToIndexFailed={() => { /* ignore */ }}
-        showsVerticalScrollIndicator={false}
-        decelerationRate="fast"
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
-        initialNumToRender={3}
-        maxToRenderPerBatch={3}
-        windowSize={3}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={true}
-        getItemLayout={(_, index) => ({
-          length: ITEM_HEIGHT,
-          offset: ITEM_HEIGHT * index,
-          index,
-        })}
-      />
+
+      {videos.length === 0 ? (
+        <View style={styles.emptyContent}>
+          <Text style={styles.emptyIcon}>🎬</Text>
+          <Text style={styles.emptyLabel}>
+            {feedMode === 'following' && !currentUser?.following?.length
+              ? 'Ikuti creator untuk melihat feed Following'
+              : 'Belum ada video'}
+          </Text>
+          {feedMode !== 'following' && (
+            <>
+              <Text style={styles.emptySubLabel}>Upload video pertama kamu!</Text>
+              <TouchableOpacity
+                style={styles.uploadBtn}
+                onPress={() => navigation.navigate('CreatePost')}
+              >
+                <Text style={styles.uploadBtnText}>Upload Video</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      ) : (
+        <FlatList
+          ref={listRef}
+          data={videos}
+          keyExtractor={(item) => `video-${item.id}`}
+          renderItem={renderVideoItem}
+          extraData={activeIndex}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => fetchVideos(true)}
+              tintColor="#E91E63"
+              colors={['#E91E63', '#fff']}
+              progressBackgroundColor="#000"
+              progressViewOffset={0}
+            />
+          }
+          style={styles.flatList}
+          contentContainerStyle={{ padding: 0 }}
+          pagingEnabled
+          snapToInterval={ITEM_HEIGHT}
+          snapToAlignment={'center'}
+          disableIntervalMomentum={true}
+          onMomentumScrollEnd={onMomentumScrollEnd}
+          onScrollToIndexFailed={() => { /* ignore */ }}
+          showsVerticalScrollIndicator={false}
+          decelerationRate="fast"
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+          windowSize={3}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={true}
+          getItemLayout={(_, index) => ({
+            length: ITEM_HEIGHT,
+            offset: ITEM_HEIGHT * index,
+            index,
+          })}
+        />
+      )}
 
       {/* Comment Modal */}
       <Modal
@@ -549,6 +585,7 @@ const styles = StyleSheet.create({
   modeTabText: { color: '#888', fontWeight: '600' },
   modeTabTextActive: { color: '#fff' },
   emptyContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  emptyContent: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24, marginTop: 100 },
   emptyIcon: { fontSize: 64, marginBottom: 16 },
   emptyLabel: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
   emptySubLabel: { color: '#888', fontSize: 14, marginBottom: 24 },

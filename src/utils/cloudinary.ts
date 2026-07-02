@@ -32,7 +32,8 @@ export const uploadToCloudinary = async (
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
-        const progress = Math.round((event.loaded / event.total) * 100);
+        // Cap progress ke maksimal 100% untuk mencegah melebihi 100%
+        const progress = Math.min(100, Math.round((event.loaded / event.total) * 100));
         onProgress(progress);
       }
     };

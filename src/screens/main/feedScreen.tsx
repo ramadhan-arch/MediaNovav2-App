@@ -167,7 +167,11 @@ export default function FeedScreen({ navigation }: any) {
   const isFocused = useIsFocused(); // pause semua video kalau screen ga lagi difokus
 
   const applyFeedMode = useCallback((items: any[]) => {
-    if (feedMode === 'following' && currentUser?.following?.length) {
+    if (feedMode === 'following') {
+      // Jika following kosong, return array kosong (bukan semua posts)
+      if (!currentUser?.following?.length) {
+        return [];
+      }
       return items.filter((post) => currentUser.following.includes(post.userId));
     }
     return items;
@@ -296,6 +300,24 @@ export default function FeedScreen({ navigation }: any) {
   };
 
   useEffect(() => { fetchPosts(); }, [currentUser?.uid, followingKey, likedPostsKey, feedMode]);
+
+  // Re-apply filter ke existing posts secara immediate saat feedMode berubah
+  // (tanpa perlu tunggu fetchPosts selesai, untuk UX yang lebih smooth)
+  useEffect(() => {
+    if (posts.length > 0) {
+      let filtered: any[] = [];
+      if (feedMode === 'following') {
+        if (!currentUser?.following?.length) {
+          filtered = [];
+        } else {
+          filtered = posts.filter((post) => currentUser.following.includes(post.userId));
+        }
+      } else {
+        filtered = posts;
+      }
+      setPosts(filtered);
+    }
+  }, [feedMode, followingKey]);
 
   // ----- Viewability: tentukan post mana yang lagi "aktif" (kelihatan) di layar -----
   const viewabilityConfig = useRef({

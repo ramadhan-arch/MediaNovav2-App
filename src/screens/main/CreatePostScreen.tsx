@@ -295,9 +295,9 @@ export default function CreatePostScreen({ navigation, route }: any) {
       {/* Upload progress */}
       {loading && (
         <View style={styles.progressBox}>
-          <Text style={styles.progressText}>Mengupload... {uploadProgress}%</Text>
+          <Text style={styles.progressText}>Mengupload... {Math.min(100, uploadProgress)}%</Text>
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+            <View style={[styles.progressFill, { width: `${Math.min(100, uploadProgress)}%` }]} />
           </View>
         </View>
       )}

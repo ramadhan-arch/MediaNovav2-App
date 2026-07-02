@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { doc, getDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
@@ -107,7 +109,16 @@ export default function FollowListScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222'
+  },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   userItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#222', gap: 12 },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E91E63', justifyContent: 'center', alignItems: 'center' },

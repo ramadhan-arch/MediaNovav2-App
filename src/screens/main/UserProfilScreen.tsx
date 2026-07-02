@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator, Image, FlatList, Alert, RefreshControl
+  ScrollView, ActivityIndicator, Image, FlatList, Alert, RefreshControl,
+  Platform, StatusBar
 } from 'react-native';
 import {
   doc, getDoc, updateDoc, addDoc, arrayUnion, arrayRemove,
@@ -260,7 +261,16 @@ export default function UserProfileScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingTop: 48, borderBottomWidth: 1, borderBottomColor: '#222' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222'
+  },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   profileSection: { alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#222' },
   avatarLarge: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E91E63', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },

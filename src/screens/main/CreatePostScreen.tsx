@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, ScrollView, Image, Modal,
-  ViewStyle
+  ViewStyle, Platform, StatusBar
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -388,7 +388,13 @@ export default function CreatePostScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },
+  header: {
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222'
+  },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   mediaButtons: { flexDirection: 'row', justifyContent: 'space-around', padding: 12, flexWrap: 'wrap', gap: 8 },
   mediaBtn: { alignItems: 'center', backgroundColor: '#111', padding: 12, borderRadius: 12, width: 62, borderWidth: 1, borderColor: '#333' },

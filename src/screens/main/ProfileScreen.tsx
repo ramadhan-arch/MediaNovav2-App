@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, Switch, ActivityIndicator, Image, FlatList, RefreshControl
+  ScrollView, Alert, Switch, ActivityIndicator, Image, FlatList, RefreshControl,
+  Platform, StatusBar
 } from 'react-native';
 import { signOut } from 'firebase/auth';
 import {
@@ -303,7 +304,13 @@ export default function ProfileScreen({ route, navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { alignItems: 'center', padding: 24, marginBottom: 12 },
+  header: {
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    marginBottom: 12,
+  },
   avatarLarge: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E91E63', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   avatarText: { color: '#fff', fontSize: 36, fontWeight: 'bold' },
   displayName: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },

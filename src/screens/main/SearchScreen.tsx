@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet,
-  FlatList, TouchableOpacity, ActivityIndicator
+  FlatList, TouchableOpacity, ActivityIndicator,
+  Platform, StatusBar
 } from 'react-native';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../utils/firebase';
@@ -80,7 +81,13 @@ export default function SearchScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },
+  header: {
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222'
+  },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   searchBox: { padding: 12 },
   searchInput: {

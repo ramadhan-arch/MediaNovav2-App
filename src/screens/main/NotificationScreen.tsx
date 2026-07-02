@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, StyleSheet,
-  TouchableOpacity, ActivityIndicator, RefreshControl
+  TouchableOpacity, ActivityIndicator, RefreshControl,
+  Platform, StatusBar
 } from 'react-native';
 import { collection, query, where, orderBy, limit, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
@@ -106,7 +107,13 @@ export default function NotificationScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },
+  header: {
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222'
+  },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   item: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#111', gap: 12 },
   unreadItem: { backgroundColor: '#0a0a1a' },

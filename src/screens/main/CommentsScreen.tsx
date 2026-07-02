@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
-  ActivityIndicator, Alert, Image, Dimensions
+  ActivityIndicator, Alert, Image, Dimensions, Platform, StatusBar
 } from 'react-native';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../utils/firebase';
@@ -187,8 +187,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.darkSecondary,
   },

@@ -3,12 +3,12 @@ import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TouchableWithoutFeedback,
   RefreshControl, ActivityIndicator, Image,
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
-  ViewToken, Animated
+  ViewToken, Animated, StatusBar
 } from 'react-native';
 import {
   collection, query, orderBy, limit, getDocs,
   doc, updateDoc, increment, addDoc, serverTimestamp,
-  startAfter, QueryDocumentSnapshot, arrayUnion, arrayRemove
+  startAfter, QueryDocumentSnapshot, arrayUnion, arrayRemove, deleteDoc
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
@@ -25,12 +25,14 @@ const PostItem = memo(function PostItem({
   isLikedByUser,
   isActive,
   isMuted,
+  isOwner,
   onToggleMute,
   onOpenUserProfile,
   onOpenVideoFullscreen,
   onLike,
   onOpenComments,
   onSave,
+  onDelete,
 }: any) {
   // double-tap detection and heart animation
   const lastTapRef = useRef<number>(0);
@@ -173,6 +175,11 @@ const PostItem = memo(function PostItem({
         <TouchableOpacity style={styles.actionBtn} onPress={() => onSave(item.id)}>
           <Ionicons name={item.isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={item.isSaved ? '#E91E63' : '#fff'} />
         </TouchableOpacity>
+        {isOwner && (
+          <TouchableOpacity style={styles.actionBtn} onPress={() => onDelete && onDelete()}>
+            <Ionicons name="trash-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Caption */}
@@ -201,7 +208,6 @@ export default function FeedScreen({ navigation }: any) {
   const [commentLoading, setCommentLoading] = useState(false);
   const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
   const followingKey = currentUser?.following?.join(',') || '';
-  const likedPostsKey = currentUser?.likedPosts?.join(',') || '';
 
   // ----- Autoplay / autopause state -----
   const [activePostId, setActivePostId] = useState<string | null>(null);
@@ -299,7 +305,7 @@ export default function FeedScreen({ navigation }: any) {
         isLiked: !isLiked,
         likesCount: (p.likesCount || 0) + (isLiked ? -1 : 1)
       } : p);
-      useStore.getState().setPosts(updatedPosts);
+      setPosts(updatedPosts);
     } catch (error) {
       console.log(error);
     }
@@ -321,7 +327,7 @@ export default function FeedScreen({ navigation }: any) {
       }
       // update local posts state
       const updatedPosts = posts.map((p) => p.id === postId ? { ...p, isSaved: !isSaved } : p);
-      useStore.getState().setPosts(updatedPosts);
+      setPosts(updatedPosts);
     } catch (e) {
       console.log(e);
       Alert.alert('Error', 'Gagal mengubah status simpan');
@@ -367,7 +373,7 @@ export default function FeedScreen({ navigation }: any) {
     }
   };
 
-  useEffect(() => { fetchPosts(); }, [currentUser?.uid, followingKey, likedPostsKey, feedMode]);
+  useEffect(() => { fetchPosts(); }, [currentUser?.uid, followingKey, feedMode]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('scrollToTop', () => {
@@ -430,15 +436,54 @@ export default function FeedScreen({ navigation }: any) {
         isLikedByUser={isLikedByUser}
         isActive={isPostActive(item.id)}
         isMuted={isMuted}
+        isOwner={currentUser?.uid === item.userId}
         onToggleMute={() => setIsMuted((m) => !m)}
         onOpenUserProfile={() => navigation.navigate('UserProfile', { userId: item.userId })}
         onOpenVideoFullscreen={() => navigation.navigate('VideoPlayer', { videoUrl: item.mediaURL, item })}
         onLike={() => handleLike(item.id, item.isLiked ?? (currentUser?.likedPosts?.includes(item.id)))}
         onOpenComments={() => openComments(item.id)}
         onSave={handleSave}
+        onDelete={() => handleDelete(item.id)}
       />
     );
   }, [posts, currentUser?.likedPosts, isPostActive, isMuted]);
+
+  const handleDelete = async (postId: string) => {
+    if (!currentUser?.uid) return;
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    if (post.userId !== currentUser.uid) {
+      Alert.alert('Tidak diizinkan', 'Hanya pemilik postingan yang bisa menghapus.');
+      return;
+    }
+    Alert.alert(
+      'Hapus postingan',
+      'Yakin ingin menghapus postingan ini? Tindakan ini tidak bisa dibatalkan.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus', style: 'destructive', onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'posts', postId));
+              // Update local posts state
+              const updated = posts.filter(p => p.id !== postId);
+              useStore.getState().setPosts(updated);
+              // Remove from user's savedPosts if present
+              if ((currentUser.savedPosts || []).includes(postId)) {
+                try {
+                  await updateDoc(doc(db, 'users', currentUser.uid), { savedPosts: arrayRemove(postId) });
+                } catch (e) { console.log('failed remove saved ref', e); }
+                updateCurrentUser({ savedPosts: (currentUser.savedPosts || []).filter(id => id !== postId) });
+              }
+            } catch (e) {
+              console.log(e);
+              Alert.alert('Error', 'Gagal menghapus postingan');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   if (loading && posts.length === 0) {
     return (
@@ -574,7 +619,7 @@ export default function FeedScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },
+  header: { paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   modeTabs: { flexDirection: 'row', backgroundColor: '#111', padding: 8, gap: 8, marginHorizontal: 12, borderRadius: 16, marginBottom: 8 },
   modeTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12 },

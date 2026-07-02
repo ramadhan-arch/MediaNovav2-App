@@ -10,6 +10,10 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Alert } from 'react-native';
+import { doc, deleteDoc, updateDoc, arrayRemove } from 'firebase/firestore';
+import { db } from '../../utils/firebase';
+import { useStore } from '../../store/useStore';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import AudioPlayer from '../../components/AudioPlayer';
 
@@ -17,6 +21,31 @@ const { width, height } = Dimensions.get('window');
 
 export default function PostDetailScreen({ navigation, route }: any) {
   const { post } = route.params || {};
+  const { currentUser, updateCurrentUser, posts } = useStore();
+
+  const handleDelete = () => {
+    if (!currentUser?.uid) return;
+    if (post.userId !== currentUser.uid) {
+      Alert.alert('Tidak diizinkan', 'Hanya pemilik postingan yang bisa menghapus.');
+      return;
+    }
+    Alert.alert('Hapus postingan', 'Yakin ingin menghapus postingan ini?', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Hapus', style: 'destructive', onPress: async () => {
+        try {
+          await deleteDoc(doc(db, 'posts', post.id));
+          // remove from saved posts if present
+          if ((currentUser.savedPosts || []).includes(post.id)) {
+            try { await updateDoc(doc(db, 'users', currentUser.uid), { savedPosts: arrayRemove(post.id) }); } catch (e) { console.log(e); }
+            updateCurrentUser({ savedPosts: (currentUser.savedPosts || []).filter((id: string) => id !== post.id) });
+          }
+          // update local posts
+          useStore.getState().setPosts((posts || []).filter((p: any) => p.id !== post.id));
+          navigation.goBack();
+        } catch (e) { console.log(e); Alert.alert('Error', 'Gagal menghapus postingan'); }
+      } }
+    ]);
+  };
 
   const player = useVideoPlayer(post?.mediaType === 'video' && post?.mediaURL ? post.mediaURL : null, (p) => {
     p.loop = true;
@@ -31,7 +60,13 @@ export default function PostDetailScreen({ navigation, route }: any) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{post?.userDisplayName || 'Postingan'}</Text>
-        <View style={{ width: 24 }} />
+        {currentUser?.uid === post?.userId ? (
+          <TouchableOpacity onPress={handleDelete} style={{ width: 40, alignItems: 'flex-end' }}>
+            <Ionicons name="trash-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>

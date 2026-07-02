@@ -25,11 +25,11 @@ MediaNova adalah aplikasi social media berbasis React Native yang berfokus pada 
 
 | Nama | NIM | Peran |
 |------|-----|-------|
-| Rizky Ramadhan | 2410501112 | Tech Lead / Mobile Dev |
-| [Nama Anggota 2] | [NIM] | Frontend Dev |
-| [Nama Anggota 3] | [NIM] | Backend Dev |
-| [Nama Anggota 4] | [NIM] | Media Specialist |
-| [Nama Anggota 5] | [NIM] | QA / DevOps |
+| [Rizky Ramadhan] | [2410501112] | Tech Lead / Mobile Dev |
+| [Ananda Wirajaya] | [2410501111] | Frontend Dev |
+| [Kirana Fitria Utami] | [2410501117] | Backend Dev |
+| [Clara Ragil Dewanti] | [2410501116] | Media Specialist |
+| [Uhkti Zahra Isyana] | [2410501130] | QA / DevOps |
 
 ---
 
@@ -134,15 +134,23 @@ medianova-app/
 │   │   │   ├── NotificationScreen.tsx
 │   │   │   ├── UserProfileScreen.tsx
 │   │   │   └── VideoPlayerScreen.tsx
+│   │   │   └── PostDetailScreen.tsx
+│   │   │   └── CommentsScreen.tsx
 │   │   └── media/
 │   │       ├── VideoRecordScreen.tsx
 │   │       ├── AudioRecordScreen.tsx
 │   │       └── CameraFilterScreen.tsx
 │   ├── components/
 │   │   └── AudioPlayer.tsx
+│   │   └── PostCard.tsx
+│   │   └── StoryRing.tsx
+│   │   └── VidioCard.tsx
 │   ├── hooks/
 │   │   └── useAuth.ts
+│   │   └── useFeed.tsx
+│   │   └── useMedia.tsx
 │   ├── store/
+│   │   └── helpers.ts
 │   │   └── useStore.ts
 │   └── utils/
 │       ├── firebase.ts
@@ -215,13 +223,13 @@ notifications/{notifId}
 
 | Fitur | Screenshot |
 |-------|-----------|
-| Login Screen | [placeholder] |
-| Feed (Home) | [placeholder] |
-| Video Feed | [placeholder] |
-| Create Post | [placeholder] |
-| Camera Filter | [placeholder] |
-| Audio Record | [placeholder] |
-| Profile | [placeholder] |
+| Login Screen | ![ScreenLogin](screenshots/ScreenLogin.jpeg) |
+| Feed (Home) | ![feedScreen](screenshots/feedScreen.jpeg) |
+| Video Feed | ![VidioFeedScreen](screenshots/VidioFeedScreen.jpeg) |
+| Create Post | ![CreatePostScreen](screenshots/CreatePostScreen.jpeg) |
+| Camera Filter | ![CameraFilter](screenshots/CameraFilter.jpeg) |
+| Audio Record | ![AudioRecord](screenshots/AudioRecord.jpeg) |
+| Profile | ![Profile](screenshots/Profile.jpeg) |
 
 ---
 

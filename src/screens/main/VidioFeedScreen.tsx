@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, StyleSheet, Dimensions,
   TouchableOpacity, ViewToken, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, Platform,
-  Alert, StatusBar, RefreshControl
+  Alert, StatusBar, RefreshControl, Image, Animated
 } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +20,7 @@ import { useStore } from '../../store/useStore';
 const initialWindow = Dimensions.get('window');
 
 // Komponen per item video
-const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, containerHeight, videoHeight, videoWidth }: any) => {
+const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, containerHeight, videoHeight, videoWidth, videoTopOffset, bottomOffset }: any) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const progressInterval = useRef<any>(null);
@@ -69,27 +69,86 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
     }
   };
 
+  // Double-tap to like: detect quick successive taps
+  const lastTapRef = useRef<number>(0);
+  const singleTapTimeout = useRef<any>(null);
+  const heartAnim = useRef(new Animated.Value(0)).current;
+
+  const runHeart = () => {
+    heartAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(heartAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(heartAnim, { toValue: 0, duration: 400, delay: 200, useNativeDriver: true })
+    ]).start();
+  };
+
+  const handleDoubleTap = () => {
+    // trigger like and animation
+    onLike(item.id, isLikedByUser);
+    runHeart();
+  };
+
+  const handleTap = () => {
+    const now = Date.now();
+    if (lastTapRef.current && (now - lastTapRef.current) < 300) {
+      // double tap
+      clearTimeout(singleTapTimeout.current);
+      lastTapRef.current = 0;
+      handleDoubleTap();
+    } else {
+      lastTapRef.current = now;
+      // single tap after delay
+      singleTapTimeout.current = setTimeout(() => {
+        togglePause();
+        lastTapRef.current = 0;
+      }, 300);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(singleTapTimeout.current);
+    };
+  }, []);
+
     return (
-    <View style={[styles.videoContainer, { height: containerHeight, width: videoWidth }]}> 
+    <View style={[styles.videoContainer, { height: containerHeight, width: videoWidth, justifyContent: 'center' }]}> 
       {item.mediaURL ? (
-        <TouchableOpacity
-          style={[styles.fullscreenVideoWrapper, { height: videoHeight }]}
-          onPress={togglePause}
-          activeOpacity={1}
-        >
-          <VideoView
-            player={player}
-            style={{ width: '100%', height: videoHeight }}
-            contentFit="cover"
-            nativeControls={false}
-          />
+          <View style={[styles.fullscreenVideoWrapper, { height: videoHeight, marginTop: -(videoTopOffset || 0) }]}> 
+            <VideoView
+              player={player}
+              style={{ width: '100%', height: videoHeight }}
+              contentFit="cover"
+              nativeControls={false}
+            />
+            {/* Transparent overlay to capture taps reliably (single + double tap) */}
+            <View
+              style={styles.touchOverlay}
+              onStartShouldSetResponder={() => true}
+              onResponderRelease={handleTap}
+            />
           {/* Pause indicator */}
           {isPaused && (
             <View style={styles.pauseOverlay}>
               <Ionicons name="play-circle" size={80} color="rgba(255,255,255,0.8)" />
             </View>
           )}
-        </TouchableOpacity>
+          {/* Double-tap heart animation */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: '45%',
+              left: '45%',
+              transform: [
+                { scale: heartAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.4] }) }
+              ],
+              opacity: heartAnim,
+            }}
+          >
+            <Ionicons name="heart" size={96} color={'#E91E63'} />
+          </Animated.View>
+        </View>
       ) : (
         <View style={[styles.fullscreenNoVideo, { height: videoHeight }]}> 
           <Text style={styles.noVideoText}>🎬</Text>
@@ -144,11 +203,22 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
         </View>
 
         {/* Bawah: info video */}
-        <View style={[styles.bottomInfo, { bottom: 20 }]}> 
-          <Text style={styles.videoUsername}>@{item.userDisplayName}</Text>
-          <Text style={styles.videoCaption} numberOfLines={2}>
-            {item.caption}
-          </Text>
+          <View style={[styles.bottomInfo, { bottom: (bottomOffset || 70) }]}> 
+          <View style={styles.bottomRow}>
+            {item.userPhotoURL ? (
+              <Image source={{ uri: item.userPhotoURL }} style={styles.avatarSmall} />
+            ) : (
+              <View style={styles.avatarSmallPlaceholder}>
+                <Text style={styles.avatarSmallText}>{(item.userDisplayName || '?').charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.videoUsername}>@{item.userDisplayName}</Text>
+              <Text style={styles.videoCaption} numberOfLines={2}>
+                {item.caption}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
     </View>
@@ -190,11 +260,13 @@ export default function VideoFeedScreen({ navigation }: any) {
   const VIDEO_BOX_RATIO_WIDTH = 9;
   const VIDEO_BOX_RATIO_HEIGHT = 16;
   const VIDEO_BOX_WIDTH = screenSize.width;
+  // Use a 9:16 portrait video box (classic portrait video)
   const VIDEO_BOX_HEIGHT = Math.round((VIDEO_BOX_WIDTH * VIDEO_BOX_RATIO_HEIGHT) / VIDEO_BOX_RATIO_WIDTH);
   const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 20;
-  const TOP_RESERVED = 100; // space for modeTabs + status bar
-  const BOTTOM_RESERVED = 80; // space for bottom nav + padding
-  const ITEM_HEIGHT = Math.max(screenSize.height, VIDEO_BOX_HEIGHT + TOP_RESERVED + BOTTOM_RESERVED + STATUS_BAR_HEIGHT);
+  const TOP_RESERVED = STATUS_BAR_HEIGHT + 56; // space for modeTabs + status bar
+  const BOTTOM_RESERVED = 90; // ensure overlays sit above bottom nav
+  // Item height is video box plus reserved spaces so paging centers the video
+  const ITEM_HEIGHT = VIDEO_BOX_HEIGHT + TOP_RESERVED + BOTTOM_RESERVED;
 
   const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
   const followingKey = currentUser?.following?.join(',') || '';
@@ -203,12 +275,16 @@ export default function VideoFeedScreen({ navigation }: any) {
   // setiap kali user like/unlike (itu penyebab bug "blank ke atas").
   const likedPostsRef = useRef<string[]>(currentUser?.likedPosts || []);
   const followingRef = useRef<string[]>(currentUser?.following || []);
+  const savedPostsRef = useRef<string[]>(currentUser?.savedPosts || []);
   useEffect(() => {
     likedPostsRef.current = currentUser?.likedPosts || [];
   }, [currentUser?.likedPosts]);
   useEffect(() => {
     followingRef.current = currentUser?.following || [];
   }, [followingKey]);
+  useEffect(() => {
+    savedPostsRef.current = currentUser?.savedPosts || [];
+  }, [currentUser?.savedPosts]);
 
   // Stop video saat pindah screen
   useFocusEffect(
@@ -238,7 +314,7 @@ export default function VideoFeedScreen({ navigation }: any) {
         id: d.id,
         ...d.data(),
         isLiked: likedPosts.includes(d.id),
-        isSaved: false,
+        isSaved: savedPostsRef.current.includes(d.id),
       }));
       let filteredVideos: any[] = [];
       if (feedMode === 'following') {
@@ -306,22 +382,46 @@ export default function VideoFeedScreen({ navigation }: any) {
   }, [currentUser?.uid, currentUser?.likedPosts, updateCurrentUser]);
 
   const handleSave = useCallback(async (mediaURL: string, postId: string) => {
-    try {
-      const { granted } = await MediaLibrary.requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert('Error', 'Butuh izin untuk menyimpan video!');
-        return;
-      }
-      Alert.alert('Menyimpan...', 'Video sedang disimpan ke galeri');
-      await MediaLibrary.saveToLibraryAsync(mediaURL);
-      setVideos(prev => prev.map(v =>
-        v.id === postId ? { ...v, isSaved: true } : v
-      ));
-      Alert.alert('Berhasil! ✅', 'Video tersimpan ke galeri');
-    } catch (e) {
-      Alert.alert('Gagal', 'Tidak bisa menyimpan video');
+    // Toggle bookmark (saved posts) in user's document
+    if (!currentUser?.uid) {
+      Alert.alert('Error', 'Harus login untuk menyimpan postingan');
+      return;
     }
-  }, []);
+    try {
+      // Use latest savedPosts from ref
+      const isCurrentlySaved = savedPostsRef.current.includes(postId);
+      if (isCurrentlySaved) {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          savedPosts: arrayRemove(postId)
+        });
+        updateCurrentUser({ savedPosts: ((currentUser?.savedPosts) || []).filter((id: string) => id !== postId) });
+        setVideos(prev => prev.map(v => v.id === postId ? { ...v, isSaved: false } : v));
+      } else {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          savedPosts: arrayUnion(postId)
+        });
+        updateCurrentUser({ savedPosts: [...((currentUser?.savedPosts) || []), postId] });
+        // mark saved in UI
+        setVideos(prev => prev.map(v => v.id === postId ? { ...v, isSaved: true } : v));
+
+        // If the post is a video but missing a thumbnail, try to generate a Cloudinary thumbnail URL
+        const post = videos.find(v => v.id === postId);
+        try {
+          if (post && post.mediaType === 'video' && !post.thumbnailURL && post.mediaURL && post.mediaURL.includes('/upload/')) {
+            const thumbnailUrl = post.mediaURL.replace('/upload/', '/upload/c_fill,w_400,h_600,g_auto/so_0/');
+            await updateDoc(doc(db, 'posts', postId), { thumbnailURL: thumbnailUrl });
+            // update local state
+            setVideos(prev => prev.map(v => v.id === postId ? { ...v, thumbnailURL: thumbnailUrl } : v));
+          }
+        } catch (thumbErr) {
+          console.log('Thumbnail generation failed', thumbErr);
+        }
+      }
+    } catch (e) {
+      console.log(e);
+      Alert.alert('Error', 'Gagal menyimpan postingan');
+    }
+  }, [currentUser?.uid, currentUser?.savedPosts, updateCurrentUser, videos]);
 
   const openComments = useCallback(async (postId: string) => {
     setSelectedPostId(postId);
@@ -449,6 +549,8 @@ export default function VideoFeedScreen({ navigation }: any) {
         containerHeight={ITEM_HEIGHT}
         videoHeight={VIDEO_BOX_HEIGHT}
         videoWidth={VIDEO_BOX_WIDTH}
+        videoTopOffset={Math.round(TOP_RESERVED + 24)}
+        bottomOffset={Math.round(BOTTOM_RESERVED + 8)}
       />
     );
   }, [activeIndex, isFocused, handleLike, openComments, handleSave]);
@@ -464,7 +566,7 @@ export default function VideoFeedScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <View style={styles.modeTabs}>
+      <View style={[styles.modeTabs, { top: STATUS_BAR_HEIGHT + 8, backgroundColor: 'transparent' }]}>
         <TouchableOpacity
           style={[styles.modeTab, feedMode === 'forYou' && styles.modeTabActive]}
           onPress={() => setFeedMode('forYou')}
@@ -612,7 +714,8 @@ const styles = StyleSheet.create({
   flatList: { flex: 1, backgroundColor: '#000' },
   flatListContent: { flexGrow: 1 },
   hiddenVideoItem: { backgroundColor: '#000' },
-  modeTabs: { position: 'absolute', top: 16, left: 16, right: 16, zIndex: 3, flexDirection: 'row', backgroundColor: 'rgba(17,17,17,0.85)', padding: 8, gap: 8, borderRadius: 16 },
+  touchOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  modeTabs: { position: 'absolute', left: 16, right: 16, zIndex: 10, flexDirection: 'row', padding: 8, gap: 8, borderRadius: 16 },
   modeTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12 },
   modeTabActive: { backgroundColor: '#E91E63' },
   modeTabText: { color: '#888', fontWeight: '600' },
@@ -638,9 +741,13 @@ const styles = StyleSheet.create({
   rightActions: { position: 'absolute', right: 12, bottom: 100, alignItems: 'center', gap: 20 },
   actionBtn: { alignItems: 'center' },
   actionText: { color: '#fff', fontSize: 11, marginTop: 3, textShadowColor: '#000', textShadowRadius: 4 },
-  bottomInfo: { position: 'absolute', bottom: 20, left: 12, right: 80 },
+  bottomInfo: { position: 'absolute', bottom: 20, left: 12, right: 80, zIndex: 6 },
   videoUsername: { color: '#fff', fontWeight: 'bold', fontSize: 15, marginBottom: 4, textShadowColor: '#000', textShadowRadius: 4 },
   videoCaption: { color: '#eee', fontSize: 13, textShadowColor: '#000', textShadowRadius: 4 },
+  bottomRow: { flexDirection: 'row', alignItems: 'center' },
+  avatarSmall: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#fff' },
+  avatarSmallPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E91E63', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#fff' },
+  avatarSmallText: { color: '#fff', fontWeight: 'bold' },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalContainer: { backgroundColor: '#111', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },

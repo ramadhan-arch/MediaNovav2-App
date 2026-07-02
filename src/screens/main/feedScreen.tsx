@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
+  View, Text, FlatList, StyleSheet, TouchableOpacity, TouchableWithoutFeedback,
   RefreshControl, ActivityIndicator, Image,
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
-  ViewToken,
+  ViewToken, Animated
 } from 'react-native';
 import {
   collection, query, orderBy, limit, getDocs,
@@ -30,7 +30,40 @@ const PostItem = memo(function PostItem({
   onOpenVideoFullscreen,
   onLike,
   onOpenComments,
+  onSave,
 }: any) {
+  // double-tap detection and heart animation
+  const lastTapRef = useRef<number>(0);
+  const singleTapTimeout = useRef<any>(null);
+  const heartAnim = useRef(new Animated.Value(0)).current;
+
+  const runHeart = () => {
+    heartAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(heartAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.timing(heartAnim, { toValue: 0, duration: 360, delay: 200, useNativeDriver: true })
+    ]).start();
+  };
+
+  const handleTap = () => {
+    const now = Date.now();
+    if (lastTapRef.current && (now - lastTapRef.current) < 300) {
+      clearTimeout(singleTapTimeout.current);
+      lastTapRef.current = 0;
+      // double tap -> like
+      onLike && onLike();
+      runHeart();
+    } else {
+      lastTapRef.current = now;
+      singleTapTimeout.current = setTimeout(() => {
+        // single tap -> toggle mute
+        onToggleMute && onToggleMute();
+        lastTapRef.current = 0;
+      }, 300);
+    }
+  };
+
+  useEffect(() => () => clearTimeout(singleTapTimeout.current), []);
   return (
     <View style={styles.postCard}>
       {/* Header */}
@@ -66,11 +99,11 @@ const PostItem = memo(function PostItem({
           ) : null}
         </View>
       ) : item.mediaType === 'video' && item.mediaURL ? (
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.videoContainer}
-          onPress={onToggleMute}
-        >
+        <View style={styles.videoContainer}>
+          {/* Use responder overlay to detect single vs double tap */}
+          <TouchableWithoutFeedback onPress={handleTap}>
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} />
+          </TouchableWithoutFeedback>
           {/* Thumbnail sebagai background */}
           {item.thumbnailURL && (
             <Image
@@ -97,6 +130,11 @@ const PostItem = memo(function PostItem({
             </View>
           )}
 
+          {/* Heart animation on double-tap */}
+          <Animated.View pointerEvents="none" style={{ position: 'absolute', left: '45%', top: '42%', transform: [{ scale: heartAnim.interpolate({ inputRange: [0,1], outputRange: [0.6,1.4] }) }], opacity: heartAnim }}>
+            <Ionicons name="heart" size={96} color={'#E91E63'} />
+          </Animated.View>
+
           {/* Toggle mute indicator */}
           <View style={styles.muteIndicator}>
             <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={16} color="#fff" />
@@ -112,7 +150,7 @@ const PostItem = memo(function PostItem({
           >
             <Ionicons name="expand" size={16} color="#fff" />
           </TouchableOpacity>
-        </TouchableOpacity>
+        </View>
       ) : item.mediaType === 'audio' && item.mediaURL ? (
         <AudioPlayer uri={item.mediaURL} caption={item.caption} />
       ) : null}
@@ -131,6 +169,9 @@ const PostItem = memo(function PostItem({
         <TouchableOpacity style={styles.actionBtn} onPress={onOpenComments}>
           <Ionicons name="chatbubble-outline" size={22} color="#fff" />
           <Text style={styles.actionCount}>{item.commentsCount || 0}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => onSave(item.id)}>
+          <Ionicons name={item.isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={item.isSaved ? '#E91E63' : '#fff'} />
         </TouchableOpacity>
       </View>
 
@@ -189,10 +230,12 @@ export default function FeedScreen({ navigation }: any) {
       );
       const snapshot = await getDocs(q);
       const likedPosts = currentUser?.likedPosts || [];
+      const savedPosts = currentUser?.savedPosts || [];
       const allPosts = snapshot.docs.map(d => ({
         id: d.id,
         ...d.data(),
         isLiked: likedPosts.includes(d.id),
+        isSaved: savedPosts.includes(d.id),
       })) as any[];
 
       const filteredPosts = applyFeedMode(allPosts);
@@ -223,6 +266,7 @@ export default function FeedScreen({ navigation }: any) {
         id: d.id,
         ...d.data(),
         isLiked: false,
+        isSaved: (currentUser?.savedPosts || []).includes(d.id),
       })) as any[];
       const filteredMorePosts = applyFeedMode(morePosts);
       const mergedPosts = [...posts, ...filteredMorePosts];
@@ -258,6 +302,29 @@ export default function FeedScreen({ navigation }: any) {
       useStore.getState().setPosts(updatedPosts);
     } catch (error) {
       console.log(error);
+    }
+  };
+
+  const handleSave = async (postId: string) => {
+    if (!currentUser?.uid) {
+      Alert.alert('Error', 'Harus login untuk menyimpan postingan');
+      return;
+    }
+    try {
+      const isSaved = (currentUser.savedPosts || []).includes(postId);
+      if (isSaved) {
+        await updateDoc(doc(db, 'users', currentUser.uid), { savedPosts: arrayRemove(postId) });
+        updateCurrentUser({ savedPosts: (currentUser.savedPosts || []).filter((id) => id !== postId) });
+      } else {
+        await updateDoc(doc(db, 'users', currentUser.uid), { savedPosts: arrayUnion(postId) });
+        updateCurrentUser({ savedPosts: [...(currentUser.savedPosts || []), postId] });
+      }
+      // update local posts state
+      const updatedPosts = posts.map((p) => p.id === postId ? { ...p, isSaved: !isSaved } : p);
+      useStore.getState().setPosts(updatedPosts);
+    } catch (e) {
+      console.log(e);
+      Alert.alert('Error', 'Gagal mengubah status simpan');
     }
   };
 
@@ -368,6 +435,7 @@ export default function FeedScreen({ navigation }: any) {
         onOpenVideoFullscreen={() => navigation.navigate('VideoPlayer', { videoUrl: item.mediaURL, item })}
         onLike={() => handleLike(item.id, item.isLiked ?? (currentUser?.likedPosts?.includes(item.id)))}
         onOpenComments={() => openComments(item.id)}
+        onSave={handleSave}
       />
     );
   }, [posts, currentUser?.likedPosts, isPostActive, isMuted]);

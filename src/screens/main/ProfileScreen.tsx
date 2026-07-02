@@ -227,12 +227,19 @@ export default function ProfileScreen({ route, navigation }: any) {
 
       <View style={[styles.section, { backgroundColor: cardColor }]}> 
         <View style={styles.profileTabs}>
-          <TouchableOpacity style={[styles.profileTab, profileTab === 'posts' && styles.profileTabActive]} onPress={() => setProfileTab('posts')}>
-            <Text style={[styles.profileTabText, profileTab === 'posts' && styles.profileTabTextActive]}>Posts</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.profileTab, profileTab === 'videos' && styles.profileTabActive]} onPress={() => setProfileTab('videos')}>
-            <Text style={[styles.profileTabText, profileTab === 'videos' && styles.profileTabTextActive]}>Videos</Text>
-          </TouchableOpacity>
+          <View style={styles.profileTabsLeft}>
+            <TouchableOpacity style={[styles.profileTab, profileTab === 'posts' && styles.profileTabActive]} onPress={() => setProfileTab('posts')}>
+              <Text style={[styles.profileTabText, profileTab === 'posts' && styles.profileTabTextActive]}>Posts</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.profileTab, profileTab === 'videos' && styles.profileTabActive]} onPress={() => setProfileTab('videos')}>
+              <Text style={[styles.profileTabText, profileTab === 'videos' && styles.profileTabTextActive]}>Videos</Text>
+            </TouchableOpacity>
+          </View>
+          {isOwnProfile && (
+            <TouchableOpacity style={styles.savedTab} onPress={() => navigation.navigate('SavedPosts')}>
+              <Ionicons name="bookmark" size={18} color={isDarkMode ? '#E91E63' : '#E91E63'} />
+            </TouchableOpacity>
+          )}
         </View>
         {userPosts.length > 0 ? (
           <View style={styles.postsGrid}>
@@ -279,6 +286,8 @@ export default function ProfileScreen({ route, navigation }: any) {
             </View>
           </View>
 
+          
+
           <TouchableOpacity
             style={styles.logoutBtn}
             onPress={handleLogout}
@@ -310,6 +319,8 @@ const styles = StyleSheet.create({
   section: { marginBottom: 12, padding: 16 },
   sectionTitle: { fontSize: 12, marginBottom: 12, textTransform: 'uppercase' },
   profileTabs: { flexDirection: 'row', marginBottom: 12, gap: 8 },
+  profileTabsLeft: { flexDirection: 'row', flex: 1, gap: 8 },
+  savedTab: { width: 44, height: 36, justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#333', backgroundColor: '#111' },
   profileTab: { flex: 1, paddingVertical: 8, borderRadius: 999, alignItems: 'center', backgroundColor: '#222' },
   profileTabActive: { backgroundColor: '#E91E63' },
   profileTabText: { color: '#888', fontWeight: '600' },

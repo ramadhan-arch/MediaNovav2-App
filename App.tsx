@@ -25,6 +25,7 @@ import UserProfileScreen from './src/screens/main/UserProfilScreen';
 import FollowListScreen from './src/screens/main/FollowListScreen';
 import VideoPlayerScreen from './src/screens/main/VideoPlayerScreen';
 import PostDetailScreen from './src/screens/main/PostDetailScreen';
+import SavedPostsScreen from './src/screens/main/SavedPostsScreen';
 
 // Media Screens
 import VideoRecordScreen from './src/screens/media/VideoRecordScreen';
@@ -42,8 +43,8 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: '#000',
           borderTopColor: '#222',
-          height: 60,
-          paddingBottom: 8,
+          height: 72,
+          paddingBottom: 14,
         },
         tabBarActiveTintColor: '#E91E63',
         tabBarInactiveTintColor: '#888',
@@ -106,6 +107,7 @@ function MainStack() {
       <Stack.Screen name="CameraFilter" component={CameraFilterScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="FollowList" component={FollowListScreen} />
+      <Stack.Screen name="SavedPosts" component={SavedPostsScreen} />
       <Stack.Screen name="VideoPlayer" component={VideoPlayerScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
     </Stack.Navigator>
@@ -133,6 +135,7 @@ export default function App() {
           followers: profile.followers || [],
           following: profile.following || [],
           likedPosts: profile.likedPosts || [],
+          savedPosts: profile.savedPosts || [],
         });
         setIsLoggedIn(true);
       } else {

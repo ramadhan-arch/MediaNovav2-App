@@ -26,8 +26,8 @@ MediaNova adalah aplikasi social media berbasis React Native yang berfokus pada 
 | Nama | NIM | Peran |
 |------|-----|-------|
 | [Rizky Ramadhan] | [2410501112] | Tech Lead / Mobile Dev |
-| [Ananda Wirajaya] | [2410501111] | Frontend Dev |
-| [Kirana Fitria Utami] | [2410501117] | Backend Dev |
+| [Kirana Fitria Utami] | [2410501111] | Frontend Dev |
+| [Ananda Wirajaya] | [2410501117] | Backend Dev |
 | [Clara Ragil Dewanti] | [2410501116] | Media Specialist |
 | [Ukhti Zahra Isyana] | [2410501130] | QA / DevOps |
 

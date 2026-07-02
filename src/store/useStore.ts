@@ -11,6 +11,7 @@ interface User {
   followers: string[];
   following: string[];
   likedPosts: string[];
+  savedPosts?: string[];
 }
 
 interface Post {

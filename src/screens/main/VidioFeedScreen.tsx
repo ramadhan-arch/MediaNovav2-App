@@ -17,20 +17,10 @@ import * as MediaLibrary from 'expo-media-library';
 import { db } from '../../utils/firebase';
 import { useStore } from '../../store/useStore';
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
-const VIDEO_HEIGHT = screenHeight - 60;
-
-// Ukuran video dipaksa 9:16, dipusatkan di dalam container (letterbox kalau perlu)
-const VIDEO_ASPECT_RATIO = 9 / 16; // width / height
-let VIDEO_BOX_WIDTH = screenWidth;
-let VIDEO_BOX_HEIGHT = VIDEO_BOX_WIDTH / VIDEO_ASPECT_RATIO;
-if (VIDEO_BOX_HEIGHT > VIDEO_HEIGHT) {
-  VIDEO_BOX_HEIGHT = VIDEO_HEIGHT;
-  VIDEO_BOX_WIDTH = VIDEO_BOX_HEIGHT * VIDEO_ASPECT_RATIO;
-}
+const initialWindow = Dimensions.get('window');
 
 // Komponen per item video
-const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave }: any) => {
+const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, containerHeight, videoHeight, videoWidth }: any) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const progressInterval = useRef<any>(null);
@@ -79,17 +69,17 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
     }
   };
 
-  return (
-    <View style={styles.videoContainer}>
+    return (
+    <View style={[styles.videoContainer, { height: containerHeight, width: videoWidth }]}> 
       {item.mediaURL ? (
         <TouchableOpacity
-          style={styles.videoWrapper}
+          style={[styles.fullscreenVideoWrapper, { height: videoHeight }]}
           onPress={togglePause}
           activeOpacity={1}
         >
           <VideoView
             player={player}
-            style={styles.video}
+            style={{ width: '100%', height: videoHeight }}
             contentFit="cover"
             nativeControls={false}
           />
@@ -101,7 +91,7 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
           )}
         </TouchableOpacity>
       ) : (
-        <View style={styles.noVideo}>
+        <View style={[styles.fullscreenNoVideo, { height: videoHeight }]}> 
           <Text style={styles.noVideoText}>🎬</Text>
         </View>
       )}
@@ -114,7 +104,7 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
       {/* Overlay UI */}
       <View style={styles.overlay} pointerEvents="box-none">
         {/* Kanan: action buttons */}
-        <View style={styles.rightActions}>
+        <View style={[styles.rightActions, { bottom: 100 }]}> 
           <TouchableOpacity
             style={styles.actionBtn}
             onPress={() => onLike(item.id, isLikedByUser)}
@@ -154,7 +144,7 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
         </View>
 
         {/* Bawah: info video */}
-        <View style={styles.bottomInfo}>
+        <View style={[styles.bottomInfo, { bottom: 20 }]}> 
           <Text style={styles.videoUsername}>@{item.userDisplayName}</Text>
           <Text style={styles.videoCaption} numberOfLines={2}>
             {item.caption}
@@ -177,6 +167,24 @@ export default function VideoFeedScreen({ navigation }: any) {
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [screenSize, setScreenSize] = useState(initialWindow);
+
+  useEffect(() => {
+    const onChange = ({ window }: any) => setScreenSize(window);
+    Dimensions.addEventListener('change', onChange);
+    return () => Dimensions.removeEventListener('change', onChange);
+  }, []);
+
+  // Use a consistent 9:16 video box ratio for the player
+  const VIDEO_BOX_RATIO_WIDTH = 9;
+  const VIDEO_BOX_RATIO_HEIGHT = 16;
+  const VIDEO_BOX_WIDTH = screenSize.width;
+  const VIDEO_BOX_HEIGHT = Math.round((VIDEO_BOX_WIDTH * VIDEO_BOX_RATIO_HEIGHT) / VIDEO_BOX_RATIO_WIDTH);
+  const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 20;
+  const TOP_RESERVED = 100; // space for modeTabs + status bar
+  const BOTTOM_RESERVED = 80; // space for bottom nav + padding
+  const ITEM_HEIGHT = Math.max(screenSize.height, VIDEO_BOX_HEIGHT + TOP_RESERVED + BOTTOM_RESERVED + STATUS_BAR_HEIGHT);
+
   const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
   const followingKey = currentUser?.following?.join(',') || '';
 
@@ -232,7 +240,7 @@ export default function VideoFeedScreen({ navigation }: any) {
     }
     // Sengaja TIDAK menaruh currentUser?.likedPosts / followingKey di sini,
     // supaya like/unlike tidak memicu fetch ulang seluruh list.
-  }, [currentUser?.uid, feedMode]);
+  }, [currentUser?.uid, feedMode, followingKey]);
 
   const handleLike = useCallback(async (postId: string, isLiked: boolean) => {
     if (!currentUser?.uid) return;
@@ -324,6 +332,37 @@ export default function VideoFeedScreen({ navigation }: any) {
   // jadi effect ini tidak lagi ke-trigger oleh aksi like.
   useEffect(() => { fetchVideos(); }, [fetchVideos]);
 
+  // FlatList ref untuk kontrol scroll (dipakai saat ada upload baru)
+  const listRef = useRef<any>(null);
+  // Track previous first item to detect new uploads prepended
+  const prevFirstIdRef = useRef<string | null>(null);
+  const prevLengthRef = useRef<number>(0);
+
+  useEffect(() => {
+    const prevFirst = prevFirstIdRef.current;
+    const prevLen = prevLengthRef.current;
+    if (videos.length > 0) {
+      // jika ada item baru di depan (upload baru), scroll ke index 0
+      if (prevLen && videos.length > prevLen && videos[0].id !== prevFirst) {
+        try { listRef.current?.scrollToIndex({ index: 0, animated: true }); } catch (e) {}
+      }
+      prevFirstIdRef.current = videos[0].id;
+      prevLengthRef.current = videos.length;
+    } else {
+      prevFirstIdRef.current = null;
+      prevLengthRef.current = videos.length;
+    }
+  }, [videos]);
+
+  // Pastikan snapping 1 video per layar: kalkulasi index saat momentum scroll selesai
+  const onMomentumScrollEnd = useCallback((e: any) => {
+    const offsetY = e.nativeEvent.contentOffset.y || 0;
+    const index = Math.round(offsetY / ITEM_HEIGHT);
+    if (index !== activeIndex) setActiveIndex(index);
+    // Pastikan posisi tepat
+    try { listRef.current?.scrollToIndex({ index, animated: true }); } catch (err) {}
+  }, [activeIndex]);
+
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0) {
@@ -335,13 +374,12 @@ export default function VideoFeedScreen({ navigation }: any) {
   const renderVideoItem = useCallback(({ item, index }: { item: any; index: number }) => {
     const shouldRender = index === activeIndex || index === activeIndex - 1 || index === activeIndex + 1;
     const isLikedByUser = item.isLiked;
-
     if (!shouldRender) {
-      return <View style={[styles.hiddenVideoItem, { height: VIDEO_HEIGHT, width: screenWidth }]} />;
+      return <View style={[styles.hiddenVideoItem, { height: ITEM_HEIGHT, width: VIDEO_BOX_WIDTH }]} />;
     }
 
     return (
-      <VideoItem
+      <MemoizedVideoItem
         key={item.id}
         item={item}
         isActive={index === activeIndex && isFocused}
@@ -349,6 +387,9 @@ export default function VideoFeedScreen({ navigation }: any) {
         onLike={handleLike}
         onComment={openComments}
         onSave={handleSave}
+        containerHeight={ITEM_HEIGHT}
+        videoHeight={VIDEO_BOX_HEIGHT}
+        videoWidth={VIDEO_BOX_WIDTH}
       />
     );
   }, [activeIndex, isFocused, handleLike, openComments, handleSave]);
@@ -395,6 +436,7 @@ export default function VideoFeedScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
       <FlatList
+        ref={listRef}
         data={videos}
         keyExtractor={(item) => `video-${item.id}`}
         renderItem={renderVideoItem}
@@ -407,19 +449,25 @@ export default function VideoFeedScreen({ navigation }: any) {
           />
         }
         style={styles.flatList}
-        contentContainerStyle={styles.flatListContent}
+        contentContainerStyle={{ padding: 0 }}
         pagingEnabled
+        snapToInterval={ITEM_HEIGHT}
+        snapToAlignment={'center'}
+        disableIntervalMomentum={true}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        onScrollToIndexFailed={() => { /* ignore */ }}
         showsVerticalScrollIndicator={false}
         decelerationRate="fast"
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
-        initialNumToRender={2}
-        maxToRenderPerBatch={2}
-        windowSize={5}
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={3}
+        updateCellsBatchingPeriod={50}
         removeClippedSubviews={true}
         getItemLayout={(_, index) => ({
-          length: VIDEO_HEIGHT,
-          offset: VIDEO_HEIGHT * index,
+          length: ITEM_HEIGHT,
+          offset: ITEM_HEIGHT * index,
           index,
         })}
       />
@@ -506,11 +554,13 @@ const styles = StyleSheet.create({
   emptySubLabel: { color: '#888', fontSize: 14, marginBottom: 24 },
   uploadBtn: { backgroundColor: '#E91E63', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
   uploadBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  videoContainer: { width: screenWidth, height: VIDEO_HEIGHT, backgroundColor: '#000', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  videoWrapper: { width: VIDEO_BOX_WIDTH, height: VIDEO_BOX_HEIGHT, justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden' },
-  video: { width: VIDEO_BOX_WIDTH, height: VIDEO_BOX_HEIGHT },
+  videoContainer: { backgroundColor: '#000', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  videoWrapper: { justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden' },
+  fullscreenVideoWrapper: { width: '100%', justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden' },
+  fullscreenVideo: { width: '100%' },
+  fullscreenNoVideo: { width: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
   pauseOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
-  noVideo: { width: VIDEO_BOX_WIDTH, height: VIDEO_BOX_HEIGHT, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  noVideo: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
   noVideoText: { fontSize: 80 },
   progressBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.2)' },
   progressBarFill: { height: 3, backgroundColor: '#E91E63' },
@@ -537,3 +587,13 @@ const styles = StyleSheet.create({
   commentInput: { flex: 1, backgroundColor: '#222', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, color: '#fff' },
   sendBtn: { backgroundColor: '#E91E63', borderRadius: 20, width: 40, justifyContent: 'center', alignItems: 'center' },
 });
+// Hindari re-render yang tidak perlu: hanya re-render saat prop penting berubah
+const areVideoPropsEqual = (prev: any, next: any) => (
+  prev.item.id === next.item.id &&
+  prev.item.isLiked === next.item.isLiked &&
+  prev.item.isSaved === next.item.isSaved &&
+  prev.isActive === next.isActive
+);
+
+// Versi memoized dengan comparator
+const MemoizedVideoItem = React.memo((props: any) => <VideoItem {...props} />, areVideoPropsEqual);

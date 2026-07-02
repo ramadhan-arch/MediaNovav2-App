@@ -197,6 +197,9 @@ export default function UserProfileScreen({ route, navigation }: any) {
               <Image source={{ uri: post.mediaURL }} style={styles.gridImage} />
             ) : post.mediaType === 'video' ? (
               <View style={styles.gridVideoBox}>
+                {post.thumbnailURL && (
+                  <Image source={{ uri: post.thumbnailURL }} style={styles.gridImage} />
+                )}
                 <Ionicons name="play-circle" size={32} color="#E91E63" />
               </View>
             ) : post.mediaType === 'audio' ? (
@@ -251,7 +254,7 @@ const styles = StyleSheet.create({
   postsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridItem: { width: '33.33%', aspectRatio: 1, padding: 1 },
   gridImage: { flex: 1, resizeMode: 'cover' },
-  gridVideoBox: { flex: 1, backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' },
+  gridVideoBox: { flex: 1, backgroundColor: '#111', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' },
   gridAudioBox: { flex: 1, backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' },
   gridTextBox: { flex: 1, backgroundColor: '#111', padding: 8, justifyContent: 'center' },
   gridTextCaption: { color: '#fff', fontSize: 11 },

@@ -1,11 +1,16 @@
 const CLOUD_NAME = 'diwgfhoux';
 const UPLOAD_PRESET = 'medianova';
 
+export interface CloudinaryUploadResult {
+  url: string;
+  thumbnailUrl?: string;
+}
+
 export const uploadToCloudinary = async (
   fileUri: string,
   fileType: 'image' | 'video' | 'audio',
   onProgress?: (progress: number) => void
-): Promise<string> => {
+): Promise<string | CloudinaryUploadResult> => {
   const formData = new FormData();
   const extension = fileType === 'video' ? 'mp4' : fileType === 'audio' ? 'm4a' : 'jpg';
   const mimeType = fileType === 'video' ? 'video/mp4' : fileType === 'audio' ? 'audio/m4a' : 'image/jpeg';
@@ -35,7 +40,18 @@ export const uploadToCloudinary = async (
     xhr.onload = () => {
       if (xhr.status === 200) {
         const response = JSON.parse(xhr.responseText);
-        resolve(response.secure_url);
+        const videoUrl = response.secure_url;
+        
+        // Untuk video, generate thumbnail URL dari Cloudinary
+        if (fileType === 'video') {
+          const thumbnailUrl = videoUrl.replace('/upload/', '/upload/c_fill,w_400,h_600,g_auto/so_0/');
+          resolve({
+            url: videoUrl,
+            thumbnailUrl: thumbnailUrl
+          });
+        } else {
+          resolve(videoUrl);
+        }
       } else {
         reject(new Error('Upload gagal: ' + xhr.status));
       }

@@ -85,10 +85,19 @@ export default function CreatePostScreen({ navigation, route }: any) {
     setUploadProgress(0);
     try {
       let mediaURL = '';
+      let thumbnailURL = '';
       if (mediaUri) {
-        mediaURL = await uploadToCloudinary(mediaUri, mediaType, (progress) => {
+        const uploadResult = await uploadToCloudinary(mediaUri, mediaType, (progress) => {
           setUploadProgress(progress);
         });
+        
+        // Handle both string and object returns
+        if (typeof uploadResult === 'string') {
+          mediaURL = uploadResult;
+        } else {
+          mediaURL = uploadResult.url;
+          thumbnailURL = uploadResult.thumbnailUrl || '';
+        }
       }
 
       const postData: any = {
@@ -106,8 +115,13 @@ export default function CreatePostScreen({ navigation, route }: any) {
         createdAt: serverTimestamp(),
       };
 
+      // Tambah thumbnail untuk video
+      if (mediaType === 'video' && thumbnailURL) {
+        postData.thumbnailURL = thumbnailURL;
+      }
+
       const docRef = await addDoc(collection(db, 'posts'), postData);
-      addPost({
+      const addPostData: any = {
         id: docRef.id,
         userId: currentUser?.uid || '',
         userDisplayName: currentUser?.displayName || '',
@@ -119,7 +133,13 @@ export default function CreatePostScreen({ navigation, route }: any) {
         commentsCount: 0,
         isLiked: false,
         createdAt: new Date(),
-      });
+      };
+
+      if (mediaType === 'video' && thumbnailURL) {
+        addPostData.thumbnailURL = thumbnailURL;
+      }
+
+      addPost(addPostData);
 
       setCaption('');
       setMediaUri(null);

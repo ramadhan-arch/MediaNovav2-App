@@ -71,6 +71,15 @@ const PostItem = memo(function PostItem({
           style={styles.videoContainer}
           onPress={onToggleMute}
         >
+          {/* Thumbnail sebagai background */}
+          {item.thumbnailURL && (
+            <Image
+              source={{ uri: item.thumbnailURL }}
+              style={styles.videoThumbnail}
+              resizeMode="cover"
+            />
+          )}
+
           <Video
             source={{ uri: item.mediaURL }}
             style={styles.videoPlayer}
@@ -487,6 +496,7 @@ const styles = StyleSheet.create({
   overlayText: { fontSize: 20, fontWeight: 'bold', textShadowColor: '#000', textShadowRadius: 6, textAlign: 'center' },
   // Video 9:16, autoplay/pause
   videoContainer: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#111', position: 'relative' },
+  videoThumbnail: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
   videoPlayer: { width: '100%', height: '100%' },
   videoPauseOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,

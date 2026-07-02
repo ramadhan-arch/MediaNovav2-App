@@ -199,6 +199,9 @@ export default function ProfileScreen({ route, navigation }: any) {
                   <Image source={{ uri: post.mediaURL }} style={styles.gridImage} />
                 ) : post.mediaType === 'video' && post.mediaURL ? (
                   <View style={styles.gridVideoBox}>
+                    {post.thumbnailURL && (
+                      <Image source={{ uri: post.thumbnailURL }} style={styles.gridImage} />
+                    )}
                     <Ionicons name="play-circle" size={32} color="#E91E63" />
                   </View>
                 ) : (
@@ -276,7 +279,7 @@ const styles = StyleSheet.create({
   postsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridItem: { width: '33.33%', aspectRatio: 1, padding: 1 },
   gridImage: { flex: 1, resizeMode: 'cover' },
-  gridVideoBox: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  gridVideoBox: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111', position: 'relative', overflow: 'hidden' },
   gridTextBox: { flex: 1, justifyContent: 'center', padding: 8, backgroundColor: '#111' },
   gridTextCaption: { color: '#fff', fontSize: 11 },
   emptyPosts: { paddingVertical: 8, textAlign: 'center' },

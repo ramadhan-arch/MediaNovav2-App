@@ -104,7 +104,7 @@ const PostItem = memo(function PostItem({
         <View style={styles.videoContainer}>
           {/* Use responder overlay to detect single vs double tap */}
           <TouchableWithoutFeedback onPress={handleTap}>
-            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} />
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} pointerEvents="box-none" />
           </TouchableWithoutFeedback>
           {/* Thumbnail sebagai background */}
           {item.thumbnailURL && (
@@ -137,21 +137,20 @@ const PostItem = memo(function PostItem({
             <Ionicons name="heart" size={96} color={'#E91E63'} />
           </Animated.View>
 
-          {/* Toggle mute indicator */}
-          <View style={styles.muteIndicator}>
-            <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={16} color="#fff" />
+          <View style={styles.videoControlsOverlay} pointerEvents="box-none">
+            <TouchableOpacity style={styles.sideControlButton} onPress={onToggleMute}>
+              <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={22} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sideControlButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                onOpenVideoFullscreen();
+              }}
+            >
+              <Ionicons name="expand" size={22} color="#fff" />
+            </TouchableOpacity>
           </View>
-
-          {/* Tombol buka fullscreen */}
-          <TouchableOpacity
-            style={styles.fullscreenBtn}
-            onPress={(e) => {
-              e.stopPropagation();
-              onOpenVideoFullscreen();
-            }}
-          >
-            <Ionicons name="expand" size={16} color="#fff" />
-          </TouchableOpacity>
         </View>
       ) : item.mediaType === 'audio' && item.mediaURL ? (
         <AudioPlayer uri={item.mediaURL} caption={item.caption} />
@@ -648,13 +647,25 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)',
   },
-  muteIndicator: {
-    position: 'absolute', top: 10, right: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 14,
-    width: 28, height: 28, justifyContent: 'center', alignItems: 'center',
+  videoControlsOverlay: {
+    position: 'absolute', top: 0, right: 0, bottom: 0,
+    width: 64, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 16,
+    backgroundColor: 'transparent', zIndex: 5,
+  },
+  sideControlButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   fullscreenBtn: {
-    position: 'absolute', bottom: 10, right: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  muteIndicator: {
+    position: 'absolute', top: 10, right: 10,
     backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 14,
     width: 28, height: 28, justifyContent: 'center', alignItems: 'center',
   },

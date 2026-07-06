@@ -5,10 +5,11 @@ import {
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
   ViewToken, Animated, StatusBar
 } from 'react-native';
+import { Share } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import {
   collection, query, orderBy, limit, getDocs,
-  doc, updateDoc, increment, addDoc, serverTimestamp,
+  doc, updateDoc, increment, addDoc, serverTimestamp, onSnapshot,
   startAfter, QueryDocumentSnapshot, arrayUnion, arrayRemove, deleteDoc
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +33,7 @@ const PostItem = memo(function PostItem({
   onOpenVideoFullscreen,
   onLike,
   onOpenComments,
+  onShare,
   onSave,
   onDelete,
 }: any) {
@@ -172,6 +174,10 @@ const PostItem = memo(function PostItem({
           <Ionicons name="chatbubble-outline" size={22} color="#fff" />
           <Text style={styles.actionCount}>{item.commentsCount || 0}</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => onShare && onShare()}>
+          <Ionicons name="share-social-outline" size={22} color="#fff" />
+          <Text style={styles.actionCount}>{item.shareCount || 0}</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => onSave(item.id)}>
           <Ionicons name={item.isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={item.isSaved ? '#E91E63' : '#fff'} />
         </TouchableOpacity>
@@ -206,6 +212,10 @@ export default function FeedScreen({ navigation }: any) {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+  const [repliesMap, setRepliesMap] = useState<Record<string, any[]>>({});
+  const [repliesVisible, setRepliesVisible] = useState<Record<string, boolean>>({});
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
   const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
   const followingKey = currentUser?.following?.join(',') || '';
 
@@ -311,6 +321,33 @@ export default function FeedScreen({ navigation }: any) {
     }
   };
 
+  const handleShare = async (post: any) => {
+    if (!post) {
+      Alert.alert('Gagal', 'Konten tidak ditemukan untuk dibagikan.');
+      return;
+    }
+    try {
+      const url = post.mediaURL || post.imageUrl || post.videoUrl || null;
+      const caption = post.caption || '';
+      // Compose share message: include media link so recipient can see the post
+      const text = url ? `${caption}\n\nLihat: ${url}` : caption;
+      const shareOptions: any = { message: text };
+      if (url) shareOptions.url = url;
+
+      await Share.share(shareOptions);
+      // update shareCount in firestore (best-effort)
+      try {
+        if (post.id) await updateDoc(doc(db, 'posts', post.id), { shareCount: increment(1) });
+      } catch (e) { console.log('share update failed', e); }
+
+      // optimistic UI update
+      setPosts((posts as any).map((p: any) => p.id === post.id ? { ...p, shareCount: ((p.shareCount || 0) + 1) } : p));
+    } catch (e) {
+      console.log('Share failed', e);
+      Alert.alert('Gagal', 'Tidak dapat membagikan konten ini.');
+    }
+  };
+
   const handleSave = async (postId: string) => {
     if (!currentUser?.uid) {
       Alert.alert('Error', 'Harus login untuk menyimpan postingan');
@@ -334,22 +371,55 @@ export default function FeedScreen({ navigation }: any) {
     }
   };
 
+  // realtime comments listener
   const openComments = async (postId: string) => {
     setSelectedPostId(postId);
     setCommentModal(true);
     setComments([]);
     try {
-      const q = query(
-        collection(db, 'posts', postId, 'comments'),
-        orderBy('createdAt', 'desc'),
-        limit(20)
-      );
-      const snap = await getDocs(q);
-      setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'desc'), limit(50));
+      const unsubscribe = onSnapshot(q, (snap) => {
+        setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      // store unsubscribe so it can be cleaned up when modal closes
+      // attach to window for simplicity
+      (openComments as any).unsubscribe = unsubscribe;
     } catch (e) { console.log(e); }
   };
 
+  const closeComments = () => {
+    setCommentModal(false);
+    setComments([]);
+    setRepliesMap({});
+    setRepliesVisible({});
+    setReplyTo(null);
+    setReplyText('');
+    // cleanup snapshot
+    const unsub = (openComments as any).unsubscribe;
+    if (typeof unsub === 'function') unsub();
+  };
+
   const handleComment = async () => {
+    // If replying to a comment
+    if (replyTo) {
+      if (!replyText.trim()) return;
+      setCommentLoading(true);
+      try {
+        const replyData = {
+          userId: currentUser?.uid,
+          userDisplayName: currentUser?.displayName,
+          text: replyText,
+          createdAt: serverTimestamp(),
+        };
+        await addDoc(collection(db, 'posts', selectedPostId, 'comments', replyTo, 'replies'), replyData);
+        await updateDoc(doc(db, 'posts', selectedPostId, 'comments', replyTo), { repliesCount: increment(1) });
+        setRepliesMap((prev) => ({ ...prev, [replyTo]: [{ id: Date.now().toString(), ...replyData, createdAt: new Date() }, ...(prev[replyTo] || [])] }));
+        setReplyText('');
+        setReplyTo(null);
+      } catch (e) { console.log(e); Alert.alert('Error', 'Gagal kirim balasan'); } finally { setCommentLoading(false); }
+      return;
+    }
+
     if (!commentText.trim()) return;
     setCommentLoading(true);
     try {
@@ -371,6 +441,44 @@ export default function FeedScreen({ navigation }: any) {
     } finally {
       setCommentLoading(false);
     }
+  };
+
+  const toggleReplies = (commentId: string) => {
+    if (repliesVisible[commentId]) {
+      setRepliesVisible((p) => ({ ...p, [commentId]: false }));
+      return;
+    }
+    if (repliesMap[commentId]?.length) {
+      setRepliesVisible((p) => ({ ...p, [commentId]: true }));
+      return;
+    }
+    const q = query(collection(db, 'posts', selectedPostId, 'comments', commentId, 'replies'), orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setRepliesMap((prev) => ({ ...prev, [commentId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
+      setRepliesVisible((p) => ({ ...p, [commentId]: true }));
+    });
+    (toggleReplies as any)[commentId] = unsub;
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    if (!currentUser?.uid) {
+      Alert.alert('Login diperlukan', 'Silakan login untuk menyukai komentar.');
+      return;
+    }
+    try {
+      const comment = comments.find((c) => c.id === commentId);
+      if (!comment) return;
+      const likedBy = comment.likedBy || [];
+      const isLiked = likedBy.includes(currentUser.uid);
+      const commentRef = doc(db, 'posts', selectedPostId, 'comments', commentId);
+      if (isLiked) {
+        await updateDoc(commentRef, { likedBy: arrayRemove(currentUser.uid), likesCount: increment(-1) });
+        setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, likesCount: (c.likesCount || 1) - 1, likedBy: (c.likedBy || []).filter((u: string) => u !== currentUser.uid) } : c));
+      } else {
+        await updateDoc(commentRef, { likedBy: arrayUnion(currentUser.uid), likesCount: increment(1) });
+        setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, likesCount: (c.likesCount || 0) + 1, likedBy: [...(c.likedBy || []), currentUser.uid] } : c));
+      }
+    } catch (e) { console.log(e); }
   };
 
   useEffect(() => { fetchPosts(); }, [currentUser?.uid, followingKey, feedMode]);
@@ -442,6 +550,7 @@ export default function FeedScreen({ navigation }: any) {
         onOpenVideoFullscreen={() => navigation.navigate('VideoPlayer', { videoUrl: item.mediaURL, item })}
         onLike={() => handleLike(item.id, item.isLiked ?? (currentUser?.likedPosts?.includes(item.id)))}
         onOpenComments={() => openComments(item.id)}
+        onShare={() => handleShare(item)}
         onSave={handleSave}
         onDelete={() => handleDelete(item.id)}
       />
@@ -581,16 +690,41 @@ export default function FeedScreen({ navigation }: any) {
               removeClippedSubviews={true}
               maxToRenderPerBatch={10}
               renderItem={({ item }) => (
-                <View style={styles.commentItem}>
-                  <View style={styles.commentAvatar}>
-                    <Text style={styles.commentAvatarText}>
-                      {item.userDisplayName?.charAt(0).toUpperCase()}
-                    </Text>
+                <View>
+                  <View style={styles.commentItem}>
+                    <View style={styles.commentAvatar}>
+                      <Text style={styles.commentAvatarText}>
+                        {item.userDisplayName?.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.commentContent}>
+                      <Text style={styles.commentName}>{item.userDisplayName}</Text>
+                      <Text style={styles.commentText}>{item.text}</Text>
+                      <View style={{ flexDirection: 'row', marginTop: 6, gap: 12, alignItems: 'center' }}>
+                        <TouchableOpacity onPress={() => handleLikeComment(item.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name={(item.likedBy || []).includes(currentUser?.uid) ? 'heart' : 'heart-outline'} size={18} color={(item.likedBy || []).includes(currentUser?.uid) ? '#E91E63' : '#888'} />
+                          <Text style={{ color: '#888', marginLeft: 6 }}>{item.likesCount || (item.likedBy ? (item.likedBy.length) : 0)}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setReplyTo(item.id); setReplyText(''); }}>
+                          <Text style={{ color: '#888' }}>Reply</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => toggleReplies(item.id)}>
+                          <Text style={{ color: '#888' }}>{repliesVisible[item.id] ? 'Sembunyikan balasan' : `Lihat balasan (${item.repliesCount || 0})`}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.commentContent}>
-                    <Text style={styles.commentName}>{item.userDisplayName}</Text>
-                    <Text style={styles.commentText}>{item.text}</Text>
-                  </View>
+                  {repliesVisible[item.id] && (repliesMap[item.id] || []).map((r) => (
+                    <View key={r.id} style={[styles.commentItem, { marginLeft: 48, backgroundColor: 'transparent' }]}> 
+                      <View style={styles.commentAvatar}>
+                        <Text style={styles.commentAvatarText}>{r.userDisplayName?.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.commentContent}>
+                        <Text style={styles.commentName}>{r.userDisplayName}</Text>
+                        <Text style={styles.commentText}>{r.text}</Text>
+                      </View>
+                    </View>
+                  ))}
                 </View>
               )}
               ListEmptyComponent={
@@ -600,10 +734,10 @@ export default function FeedScreen({ navigation }: any) {
             <View style={styles.commentInputBox}>
               <TextInput
                 style={styles.commentInput}
-                placeholder="Tulis komentar..."
+                placeholder={replyTo ? 'Balas @...' : 'Tulis komentar...'}
                 placeholderTextColor="#888"
-                value={commentText}
-                onChangeText={setCommentText}
+                value={replyTo ? replyText : commentText}
+                onChangeText={replyTo ? setReplyText : setCommentText}
                 multiline
               />
               <TouchableOpacity

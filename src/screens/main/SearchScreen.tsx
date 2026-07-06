@@ -29,10 +29,17 @@ interface SearchPost {
   userId?: string;
   likesCount?: number;
   mediaType?: 'image' | 'video' | 'audio';
+  hashtags?: string[];
   type: 'post';
 }
 
 type SearchResult = SearchUser | SearchPost;
+
+interface SearchSection {
+  title: string;
+  data: SearchResult[];
+  key: string;
+}
 
 export default function SearchScreen({ navigation }: any) {
   const [searchText, setSearchText] = useState('');
@@ -90,10 +97,10 @@ export default function SearchScreen({ navigation }: any) {
     }
   };
 
-  const sections = [
+  const sections: SearchSection[] = [
     { title: 'Users', data: userResults, key: 'users' },
     { title: 'Posts', data: postResults, key: 'posts' },
-  ].filter(s => s.data.length > 0);
+  ].filter(s => s.data.length > 0) as SearchSection[];
 
   const renderUserItem = ({ item }: { item: SearchUser }) => (
     <TouchableOpacity
@@ -181,15 +188,14 @@ export default function SearchScreen({ navigation }: any) {
       {loading && <ActivityIndicator color="#E91E63" style={{ marginTop: 20 }} />}
 
       {sections.length > 0 ? (
-        <SectionList
+        <SectionList<SearchResult, SearchSection>
           sections={sections}
           keyExtractor={(item) => item.id}
-          renderItem={({ item, section }) => {
-            if (section.key === 'users') {
-              return renderUserItem({ item: item as SearchUser });
-            } else {
-              return renderPostItem({ item: item as SearchPost });
+          renderItem={({ item }) => {
+            if (item.type === 'user') {
+              return renderUserItem({ item });
             }
+            return renderPostItem({ item });
           }}
           renderSectionHeader={renderSectionHeader}
         />

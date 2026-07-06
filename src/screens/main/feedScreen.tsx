@@ -497,6 +497,14 @@ export default function FeedScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>🎬 MediaNova</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+          <View style={{ position: 'relative' }}>
+            <Ionicons name="notifications-outline" size={24} color="#fff" />
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationCount}>3</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.modeTabs}>
@@ -619,8 +627,10 @@ export default function FeedScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  header: { paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  notificationBadge: { position: 'absolute', top: -8, right: -8, backgroundColor: '#E91E63', borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' },
+  notificationCount: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   modeTabs: { flexDirection: 'row', backgroundColor: '#111', padding: 8, gap: 8, marginHorizontal: 12, borderRadius: 16, marginBottom: 8 },
   modeTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12 },
   modeTabActive: { backgroundColor: '#E91E63' },

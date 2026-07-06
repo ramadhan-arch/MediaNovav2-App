@@ -51,8 +51,8 @@ function MainTabs() {
         tabBarIcon: ({ focused, color, size }) => {
           if (route.name === 'Feed') {
             return <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />;
-          } else if (route.name === 'VideoFeed') {
-            return <Ionicons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />;
+          } else if (route.name === 'Search') {
+            return <Ionicons name={focused ? 'search' : 'search-outline'} size={24} color={color} />;
           } else if (route.name === 'CreatePost') {
             return (
               <View style={{
@@ -64,8 +64,8 @@ function MainTabs() {
                 <Ionicons name="add" size={28} color="#fff" />
               </View>
             );
-          } else if (route.name === 'Notifications') {
-            return <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={24} color={color} />;
+          } else if (route.name === 'VideoFeed') {
+            return <Ionicons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />;
           } else if (route.name === 'Profile') {
             return <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />;
           }
@@ -91,9 +91,9 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Feed" component={FeedScreen} options={{ tabBarLabel: 'Home' }} />
-      <Tab.Screen name="VideoFeed" component={VideoFeedScreen} options={{ tabBarLabel: 'Video' }} />
+      <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Cari' }} />
       <Tab.Screen name="CreatePost" component={CreatePostScreen} options={{ tabBarLabel: '' }} />
-      <Tab.Screen name="Notifications" component={NotificationScreen} options={{ tabBarLabel: 'Notif' }} />
+      <Tab.Screen name="VideoFeed" component={VideoFeedScreen} options={{ tabBarLabel: 'Video' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profil' }} />
     </Tab.Navigator>
   );
@@ -103,6 +103,7 @@ function MainStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen name="Notifications" component={NotificationScreen} />
       <Stack.Screen name="VideoRecord" component={VideoRecordScreen} />
       <Stack.Screen name="AudioRecord" component={AudioRecordScreen} />
       <Stack.Screen name="CameraFilter" component={CameraFilterScreen} />

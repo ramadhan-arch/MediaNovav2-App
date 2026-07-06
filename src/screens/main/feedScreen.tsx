@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, TouchableWithoutFeedback,
-  RefreshControl, ActivityIndicator, Image,
+  RefreshControl, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
   ViewToken, Animated, StatusBar
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import {
   collection, query, orderBy, limit, getDocs,
   doc, updateDoc, increment, addDoc, serverTimestamp,
@@ -86,7 +87,7 @@ const PostItem = memo(function PostItem({
       {/* Media */}
       {item.mediaType === 'image' && item.mediaURL ? (
         <View style={styles.imageContainer}>
-          <Image source={{ uri: item.mediaURL }} style={styles.postImage} resizeMode="cover" />
+          <ExpoImage source={{ uri: item.mediaURL }} style={styles.postImage} contentFit="contain" />
           {item.textOverlay ? (
             <View style={[
               styles.overlayContainer,
@@ -108,17 +109,17 @@ const PostItem = memo(function PostItem({
           </TouchableWithoutFeedback>
           {/* Thumbnail sebagai background */}
           {item.thumbnailURL && (
-            <Image
+            <ExpoImage
               source={{ uri: item.thumbnailURL }}
               style={styles.videoThumbnail}
-              resizeMode="cover"
+              contentFit="contain"
             />
           )}
 
           <Video
             source={{ uri: item.mediaURL }}
             style={styles.videoPlayer}
-            resizeMode={ResizeMode.COVER}
+            resizeMode={ResizeMode.CONTAIN}
             shouldPlay={isActive}
             isLooping
             isMuted={isMuted}
@@ -631,18 +632,18 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   username: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   postTime: { color: '#888', fontSize: 11 },
-  // Image 1:1 ratio
-  imageContainer: { width: '100%', aspectRatio: 1, position: 'relative' },
-  postImage: { width: '100%', height: '100%' },
+  // Image 1:1 ratio container, keep original aspect ratio inside
+  imageContainer: { width: '100%', aspectRatio: 1, position: 'relative', backgroundColor: '#000', overflow: 'hidden' },
+  postImage: { width: '100%', height: '100%', backgroundColor: '#000' },
   overlayContainer: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16 },
   overlayTop: { top: 16 },
   overlayCenter: { top: '45%' },
   overlayBottom: { bottom: 16 },
   overlayText: { fontSize: 20, fontWeight: 'bold', textShadowColor: '#000', textShadowRadius: 6, textAlign: 'center' },
-  // Video 9:16, autoplay/pause
-  videoContainer: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#111', position: 'relative' },
-  videoThumbnail: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
-  videoPlayer: { width: '100%', height: '100%' },
+  // Video 9:16 container, keep original aspect ratio inside
+  videoContainer: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#000', position: 'relative', overflow: 'hidden' },
+  videoThumbnail: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1, backgroundColor: '#000' },
+  videoPlayer: { width: '100%', height: '100%', backgroundColor: '#000' },
   videoPauseOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)',

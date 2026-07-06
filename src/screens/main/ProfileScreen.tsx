@@ -247,11 +247,11 @@ export default function ProfileScreen({ route, navigation }: any) {
             {userPosts.filter((post) => profileTab === 'videos' ? post.mediaType === 'video' : true).slice(0, 6).map((post) => (
               <TouchableOpacity key={post.id} style={styles.gridItem} onPress={() => navigation.navigate('PostDetail', { post } as any)}>
                 {post.mediaType === 'image' && post.mediaURL ? (
-                  <Image source={{ uri: post.mediaURL }} style={styles.gridImage} />
+                  <Image source={{ uri: post.mediaURL }} style={styles.gridImage} resizeMode="contain" />
                 ) : post.mediaType === 'video' && post.mediaURL ? (
                   <View style={styles.gridVideoBox}>
                     {post.thumbnailURL && (
-                      <Image source={{ uri: post.thumbnailURL }} style={styles.gridImage} />
+                      <Image source={{ uri: post.thumbnailURL }} style={styles.gridImage} resizeMode="contain" />
                     )}
                     <Ionicons name="play-circle" size={32} color="#E91E63" />
                   </View>
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   logoutText: { color: '#ff3333', fontSize: 16, fontWeight: 'bold' },
   postsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridItem: { width: '33.33%', aspectRatio: 1, padding: 1 },
-  gridImage: { flex: 1, resizeMode: 'cover' },
+  gridImage: { flex: 1, backgroundColor: '#000' },
   gridVideoBox: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111', position: 'relative', overflow: 'hidden' },
   gridTextBox: { flex: 1, justifyContent: 'center', padding: 8, backgroundColor: '#111' },
   gridTextCaption: { color: '#fff', fontSize: 11 },

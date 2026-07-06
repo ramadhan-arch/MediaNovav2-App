@@ -118,7 +118,7 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
             <VideoView
               player={player}
               style={{ width: '100%', height: videoHeight }}
-              contentFit="cover"
+              contentFit="contain"
               nativeControls={false}
             />
             {/* Transparent overlay to capture taps reliably (single + double tap) */}

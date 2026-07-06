@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Dimensions,
   StatusBar,
   ScrollView,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Alert } from 'react-native';
 import { doc, deleteDoc, updateDoc, arrayRemove } from 'firebase/firestore';
@@ -71,9 +71,13 @@ export default function PostDetailScreen({ navigation, route }: any) {
 
       <ScrollView contentContainerStyle={styles.content}>
         {post?.mediaType === 'image' && post?.mediaURL ? (
-          <Image source={{ uri: post.mediaURL }} style={styles.media} resizeMode="contain" />
+          <View style={styles.imageContainer}>
+            <ExpoImage source={{ uri: post.mediaURL }} style={styles.media} contentFit="contain" />
+          </View>
         ) : post?.mediaType === 'video' && post?.mediaURL ? (
-          <VideoView player={player} style={styles.media} contentFit="contain" nativeControls />
+          <View style={styles.videoContainer}>
+            <VideoView player={player} style={styles.media} contentFit="contain" nativeControls />
+          </View>
         ) : post?.mediaType === 'audio' && post?.mediaURL ? (
           <View style={styles.audioBox}>
             <AudioPlayer uri={post.mediaURL} caption={post.caption} />
@@ -100,9 +104,11 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center' },
   headerTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   content: { flexGrow: 1, paddingBottom: 24 },
-  media: { width, height: height * 0.6, backgroundColor: '#111' },
+  imageContainer: { width: '100%', aspectRatio: 1, backgroundColor: '#000', marginBottom: 16, overflow: 'hidden' },
+  videoContainer: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#000', marginBottom: 16, overflow: 'hidden' },
+  media: { width: '100%', height: '100%', backgroundColor: '#000' },
   audioBox: { padding: 16 },
-  placeholder: { height: height * 0.6, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  placeholder: { width: '100%', aspectRatio: 9 / 16, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
   placeholderText: { color: '#888', fontSize: 16 },
   captionBox: { padding: 16 },
   caption: { color: '#fff', fontSize: 15, lineHeight: 22 },

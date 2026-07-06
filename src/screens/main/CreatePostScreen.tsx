@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, ScrollView, Image, Modal,
+  Alert, ActivityIndicator, ScrollView, Modal,
   ViewStyle, Platform, StatusBar
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -22,6 +23,9 @@ export default function CreatePostScreen({ navigation, route }: any) {
   const [mediaType, setMediaType] = useState<'image' | 'video' | 'audio'>('image');
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewFilterName, setPreviewFilterName] = useState('Normal');
+  const [previewTintColor, setPreviewTintColor] = useState<string | null>(null);
+  const [previewStickerLayers, setPreviewStickerLayers] = useState<any[]>([]);
 
   // Text overlay state
   const [showTextOverlay, setShowTextOverlay] = useState(false);
@@ -37,15 +41,25 @@ export default function CreatePostScreen({ navigation, route }: any) {
   );
 
   useEffect(() => {
-    if (route?.params?.imageUri) {
-      setMediaUri(route.params.imageUri);
+    if (route?.params?.editedImageUri || route?.params?.imageUri) {
+      setMediaUri(route.params.editedImageUri || route.params.imageUri);
       setMediaType('image');
+      setPreviewFilterName(route.params.filterName || 'Normal');
+      setPreviewTintColor(route.params.tintColor || null);
+      const hasFlattenedImage = !!route?.params?.editedImageUri;
+      setPreviewStickerLayers(hasFlattenedImage ? [] : route.params.stickerLayers || []);
     } else if (route?.params?.videoUri) {
       setMediaUri(route.params.videoUri);
       setMediaType('video');
+      setPreviewFilterName('Normal');
+      setPreviewTintColor(null);
+      setPreviewStickerLayers([]);
     } else if (route?.params?.audioUri) {
       setMediaUri(route.params.audioUri);
       setMediaType('audio');
+      setPreviewFilterName('Normal');
+      setPreviewTintColor(null);
+      setPreviewStickerLayers([]);
     }
   }, [route?.params]);
 
@@ -59,6 +73,8 @@ export default function CreatePostScreen({ navigation, route }: any) {
       setMediaUri(result.assets[0].uri);
       setMediaType('image');
       setSavedOverlayText('');
+      setPreviewTintColor(null);
+      setPreviewStickerLayers([]);
     }
   };
 
@@ -73,6 +89,8 @@ export default function CreatePostScreen({ navigation, route }: any) {
       setMediaUri(result.assets[0].uri);
       setMediaType('video');
       setSavedOverlayText('');
+      setPreviewTintColor(null);
+      setPreviewStickerLayers([]);
     }
   };
 
@@ -198,7 +216,7 @@ export default function CreatePostScreen({ navigation, route }: any) {
 
         <TouchableOpacity
           style={styles.mediaBtn}
-          onPress={() => navigation.navigate('CameraFilter')}
+          onPress={() => navigation.navigate('CameraFilter', { reopenFromCreatePost: true })}
         >
           <Ionicons name="color-filter-outline" size={26} color="#fff" />
           <Text style={styles.mediaBtnText}>Filter</Text>
@@ -211,7 +229,32 @@ export default function CreatePostScreen({ navigation, route }: any) {
           {/* IMAGE preview */}
           {mediaType === 'image' && (
             <View style={styles.imageWrapper}>
-              <Image source={{ uri: mediaUri }} style={styles.previewImage} />
+              <ExpoImage source={{ uri: mediaUri }} style={styles.previewImage} contentFit="contain" />
+              {previewTintColor ? (
+                <View style={[styles.tintOverlay, { backgroundColor: previewTintColor }]} pointerEvents="none" />
+              ) : null}
+              {previewStickerLayers.map((sticker) => {
+                const size = 62 * (sticker.scale || 1);
+                return (
+                  <View
+                    key={sticker.id}
+                    style={[
+                      styles.stickerLayer,
+                      {
+                        width: size,
+                        height: size,
+                        left: (sticker.x || 0) - size / 2,
+                        top: (sticker.y || 0) - size / 2,
+                        transform: [{ rotate: `${sticker.rotation || 0}deg` }],
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.stickerEmoji, { fontSize: 32 * (sticker.scale || 1), lineHeight: 36 * (sticker.scale || 1) }]}>
+                      {sticker.emoji}
+                    </Text>
+                  </View>
+                );
+              })}
               {savedOverlayText ? (
                 <Text style={[
                   styles.overlayTextPreview,
@@ -400,10 +443,13 @@ const styles = StyleSheet.create({
   mediaBtn: { alignItems: 'center', backgroundColor: '#111', padding: 12, borderRadius: 12, width: 62, borderWidth: 1, borderColor: '#333' },
   mediaBtnText: { color: '#fff', fontSize: 10, marginTop: 4 },
   previewBox: { margin: 12, borderRadius: 12, overflow: 'hidden', backgroundColor: '#111' },
-  imageWrapper: { position: 'relative' },
-  previewImage: { width: '100%', height: 300, resizeMode: 'cover' },
-  videoWrapper: { position: 'relative', height: 300 },
-  videoPreview: { width: '100%', height: 300 },
+  imageWrapper: { position: 'relative', width: '100%', aspectRatio: 1, backgroundColor: '#000', overflow: 'hidden' },
+  previewImage: { width: '100%', height: '100%', backgroundColor: '#000' },
+  tintOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2, opacity: 0.35 },
+  stickerLayer: { position: 'absolute', justifyContent: 'center', alignItems: 'center', zIndex: 3 },
+  stickerEmoji: { textAlign: 'center' },
+  videoWrapper: { position: 'relative', width: '100%', aspectRatio: 9 / 16, backgroundColor: '#000', overflow: 'hidden' },
+  videoPreview: { width: '100%', height: '100%', backgroundColor: '#000' },
   audioPreview: { height: 150, justifyContent: 'center', alignItems: 'center', gap: 12 },
   audioPreviewText: { color: '#fff', fontSize: 16 },
   overlayTextPreview: {

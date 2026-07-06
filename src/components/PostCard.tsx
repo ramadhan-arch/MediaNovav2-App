@@ -71,7 +71,7 @@ export default function PostCard({ post, onLike, onComment }: PostCardProps) {
         <Image
           source={{ uri: post.mediaURL }}
           style={styles.image}
-          resizeMode="cover"
+          resizeMode="contain"
         />
       )}
 

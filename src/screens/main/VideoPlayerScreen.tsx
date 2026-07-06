@@ -26,17 +26,21 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
     }, [])
   );
 
+  const VIDEO_BOX_HEIGHT = Math.round(width * 16 / 9);
+
   return (
     <View style={styles.container}>
       <StatusBar hidden />
 
       {/* Video 9:16 */}
-      <VideoView
-        player={player}
-        style={styles.video}
-        contentFit="contain"
-        nativeControls={true}
-      />
+      <View style={[styles.videoContainer, { height: VIDEO_BOX_HEIGHT }]}> 
+        <VideoView
+          player={player}
+          style={styles.video}
+          contentFit="contain"
+          nativeControls={true}
+        />
+      </View>
 
       {/* Header overlay */}
       <View style={styles.header}>
@@ -71,8 +75,9 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  video: { width, height },
+  container: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  videoContainer: { width: '100%', backgroundColor: '#000', overflow: 'hidden' },
+  video: { width: '100%', height: '100%', backgroundColor: '#000' },
   header: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', padding: 16, paddingTop: 48, gap: 12, backgroundColor: 'rgba(0,0,0,0.4)' },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   username: { color: '#fff', fontWeight: 'bold', fontSize: 16, textShadowColor: '#000', textShadowRadius: 4 },

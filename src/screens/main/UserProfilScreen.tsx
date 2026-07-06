@@ -226,11 +226,11 @@ export default function UserProfileScreen({ route, navigation }: any) {
         {userPosts.filter((post) => profileTab === 'videos' ? post.mediaType === 'video' : true).map(post => (
           <TouchableOpacity key={post.id} style={styles.gridItem} onPress={() => navigation.navigate('PostDetail', { post } as any)}>
             {post.mediaURL && post.mediaType === 'image' ? (
-              <Image source={{ uri: post.mediaURL }} style={styles.gridImage} />
+              <Image source={{ uri: post.mediaURL }} style={styles.gridImage} resizeMode="contain" />
             ) : post.mediaType === 'video' ? (
               <View style={styles.gridVideoBox}>
                 {post.thumbnailURL && (
-                  <Image source={{ uri: post.thumbnailURL }} style={styles.gridImage} />
+                  <Image source={{ uri: post.thumbnailURL }} style={styles.gridImage} resizeMode="contain" />
                 )}
                 <Ionicons name="play-circle" size={32} color="#E91E63" />
               </View>

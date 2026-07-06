@@ -60,7 +60,7 @@ export default function VidioCard({ video, onLike, onComment }: VidioCardProps) 
           <VideoView
             player={player}
             style={styles.video}
-            contentFit="cover"
+            contentFit="contain"
           />
         ) : (
           <View style={styles.placeholder}>
@@ -134,16 +134,19 @@ export default function VidioCard({ video, onLike, onComment }: VidioCardProps) 
 
 const styles = StyleSheet.create({
   container: {
-    height: height * 0.85,
+    width,
+    aspectRatio: 9 / 16,
     backgroundColor: '#000',
   },
   videoWrapper: {
     flex: 1,
     position: 'relative',
+    overflow: 'hidden',
   },
   video: {
-    flex: 1,
     width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
   },
   placeholder: {
     flex: 1,

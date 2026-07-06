@@ -28,6 +28,28 @@ interface Post {
   isLiked: boolean;
 }
 
+interface LastEditedMedia {
+  originalImage: string;
+  filteredImage: string;
+  editedImageUri: string;
+  activeFilter: string;
+  activeTint: string | null;
+  brightness: number;
+  contrast: number;
+  stickerLayers: StickerLayer[];
+  activeStickerCategory: string;
+  activeStickerId: string | null;
+}
+
+interface StickerLayer {
+  id: string;
+  emoji: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
+
 interface AppState {
   currentUser: User | null;
   isLoggedIn: boolean;
@@ -40,6 +62,9 @@ interface AppState {
   updatePost: (id: string, data: Partial<Post>) => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  lastEditedMedia: LastEditedMedia | null;
+  setLastEditedMedia: (media: LastEditedMedia) => void;
+  clearLastEditedMedia: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -58,4 +83,7 @@ export const useStore = create<AppState>((set) => ({
   })),
   isDarkMode: false,
   toggleDarkMode: () => set((state) => ({ isDarkMode: !state.isDarkMode })),
+  lastEditedMedia: null,
+  setLastEditedMedia: (media) => set({ lastEditedMedia: media }),
+  clearLastEditedMedia: () => set({ lastEditedMedia: null }),
 }));

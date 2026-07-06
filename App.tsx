@@ -78,8 +78,9 @@ function MainTabs() {
             const state = navigation?.getState && navigation.getState();
             const focusedRoute = state?.routes?.[state.index];
             if (focusedRoute?.name === route.name) {
-              if (navigation && typeof navigation.emit === 'function') {
-                navigation.emit({ type: 'scrollToTop' });
+              const navAny = navigation as any;
+              if (navAny && typeof navAny.emit === 'function') {
+                navAny.emit({ type: 'scrollToTop' });
               }
             }
           } catch (err) {

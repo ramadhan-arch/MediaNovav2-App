@@ -3,7 +3,8 @@ import {
   View, Text, FlatList, StyleSheet, Dimensions,
   TouchableOpacity, ViewToken, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, Platform,
-  Alert, StatusBar, RefreshControl, Image, Animated
+  Alert, StatusBar, RefreshControl, Image, Animated,
+  Share
 } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   collection, query, where, orderBy, limit, getDocs,
   doc, updateDoc, increment, addDoc, serverTimestamp,
-  arrayUnion, arrayRemove
+  arrayUnion, arrayRemove, onSnapshot
 } from 'firebase/firestore';
 import * as MediaLibrary from 'expo-media-library';
 import { db } from '../../utils/firebase';
@@ -20,7 +21,7 @@ import { useStore } from '../../store/useStore';
 const initialWindow = Dimensions.get('window');
 
 // Komponen per item video
-const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, containerHeight, videoHeight, videoWidth, videoTopOffset, bottomOffset }: any) => {
+const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, onShare, containerHeight, videoHeight, videoWidth, videoTopOffset, bottomOffset }: any) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const progressInterval = useRef<any>(null);
@@ -196,7 +197,7 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
             <Text style={styles.actionText}>Simpan</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => onShare(item)}>
             <Ionicons name="arrow-redo-outline" size={30} color="#fff" />
             <Text style={styles.actionText}>Share</Text>
           </TouchableOpacity>
@@ -236,6 +237,11 @@ export default function VideoFeedScreen({ navigation }: any) {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+  const [repliesMap, setRepliesMap] = useState<Record<string, any[]>>({});
+  const [repliesVisible, setRepliesVisible] = useState<Record<string, boolean>>({});
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replyPlaceholder, setReplyPlaceholder] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [screenSize, setScreenSize] = useState(initialWindow);
 
@@ -423,20 +429,103 @@ export default function VideoFeedScreen({ navigation }: any) {
     }
   }, [currentUser?.uid, currentUser?.savedPosts, updateCurrentUser, videos]);
 
+  const handleShare = useCallback(async (video: any) => {
+    if (!video) {
+      Alert.alert('Gagal', 'Konten tidak ditemukan untuk dibagikan.');
+      return;
+    }
+    try {
+      const url = video.mediaURL || video.videoUrl || video.imageUrl || '';
+      const caption = video.caption || '';
+      const text = url ? `${caption}\n\nLihat: ${url}` : caption;
+      const shareOptions: any = { message: text };
+      if (url) shareOptions.url = url;
+
+      await Share.share(shareOptions);
+      try {
+        if (video.id) await updateDoc(doc(db, 'posts', video.id), { shareCount: increment(1) });
+      } catch (e) {
+        console.log('share update failed', e);
+      }
+      setVideos(prev => prev.map(v => v.id === video.id ? { ...v, shareCount: (v.shareCount || 0) + 1 } : v));
+    } catch (e) {
+      console.log('Share failed', e);
+      Alert.alert('Gagal', 'Tidak dapat membagikan konten ini.');
+    }
+  }, []);
+
   const openComments = useCallback(async (postId: string) => {
     setSelectedPostId(postId);
     setCommentModal(true);
+    setComments([]);
+    setRepliesMap({});
+    setRepliesVisible({});
+    setReplyTo(null);
+    setReplyText('');
+    setReplyPlaceholder(null);
     try {
       const q = query(
         collection(db, 'posts', postId, 'comments'),
         orderBy('createdAt', 'desc')
       );
-      const snap = await getDocs(q);
-      setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const unsubscribe = onSnapshot(q, (snap) => {
+        setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      (openComments as any).unsubscribe = unsubscribe;
     } catch (e) { console.log(e); }
-  }, [currentUser]);
+  }, []);
+
+  const closeComments = useCallback(() => {
+    setCommentModal(false);
+    setComments([]);
+    setRepliesMap({});
+    setRepliesVisible({});
+    setReplyTo(null);
+    setReplyText('');
+    setReplyPlaceholder(null);
+    const unsub = (openComments as any).unsubscribe;
+    if (typeof unsub === 'function') unsub();
+  }, []);
+
+  const setReplyToAndPlaceholder = useCallback((commentId: string) => {
+    const targetComment = comments.find((c) => c.id === commentId);
+    setReplyTo(commentId);
+    setCommentText('');
+    setReplyText('');
+    setReplyPlaceholder(targetComment ? `Balas @${targetComment.userDisplayName}...` : 'Balas...');
+  }, [comments]);
 
   const handleComment = useCallback(async () => {
+    if (replyTo) {
+      if (!replyText.trim()) return;
+      setCommentLoading(true);
+      try {
+        const replyData = {
+          userId: currentUser?.uid,
+          userDisplayName: currentUser?.displayName,
+          text: replyText,
+          createdAt: serverTimestamp(),
+          likesCount: 0,
+          likedBy: [],
+        };
+        await addDoc(collection(db, 'posts', selectedPostId, 'comments', replyTo, 'replies'), replyData);
+        await updateDoc(doc(db, 'posts', selectedPostId, 'comments', replyTo), { repliesCount: increment(1) });
+        setRepliesMap(prev => ({
+          ...prev,
+          [replyTo]: [{ id: Date.now().toString(), ...replyData, createdAt: new Date() }, ...(prev[replyTo] || [])],
+        }));
+        setRepliesVisible(prev => ({ ...prev, [replyTo]: true }));
+        setReplyText('');
+        setReplyTo(null);
+        setReplyPlaceholder(null);
+      } catch (e) {
+        Alert.alert('Error', 'Gagal kirim balasan');
+      } finally {
+        setCommentLoading(false);
+      }
+      return;
+    }
+
     if (!commentText.trim()) return;
     setCommentLoading(true);
     try {
@@ -458,7 +547,24 @@ export default function VideoFeedScreen({ navigation }: any) {
     } finally {
       setCommentLoading(false);
     }
-  }, [commentText, currentUser, selectedPostId]);
+  }, [commentText, replyText, replyTo, currentUser, selectedPostId]);
+
+  const toggleReplies = useCallback((commentId: string) => {
+    if (repliesVisible[commentId]) {
+      setRepliesVisible((p) => ({ ...p, [commentId]: false }));
+      return;
+    }
+    if (repliesMap[commentId]?.length) {
+      setRepliesVisible((p) => ({ ...p, [commentId]: true }));
+      return;
+    }
+    const q = query(collection(db, 'posts', selectedPostId, 'comments', commentId, 'replies'), orderBy('createdAt', 'asc'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setRepliesMap((prev) => ({ ...prev, [commentId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
+      setRepliesVisible((p) => ({ ...p, [commentId]: true }));
+    });
+    (toggleReplies as any)[commentId] = unsubscribe;
+  }, [repliesMap, repliesVisible, selectedPostId]);
 
   // fetchVideos sekarang hanya berubah identitas saat uid atau feedMode berubah,
   // jadi effect ini tidak lagi ke-trigger oleh aksi like.
@@ -546,6 +652,7 @@ export default function VideoFeedScreen({ navigation }: any) {
         onLike={handleLike}
         onComment={openComments}
         onSave={handleSave}
+        onShare={handleShare}
         containerHeight={ITEM_HEIGHT}
         videoHeight={VIDEO_BOX_HEIGHT}
         videoWidth={VIDEO_BOX_WIDTH}
@@ -657,7 +764,7 @@ export default function VideoFeedScreen({ navigation }: any) {
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Komentar</Text>
-              <TouchableOpacity onPress={() => setCommentModal(false)}>
+              <TouchableOpacity onPress={closeComments}>
                 <Ionicons name="close" size={24} color="#888" />
               </TouchableOpacity>
             </View>
@@ -666,16 +773,41 @@ export default function VideoFeedScreen({ navigation }: any) {
               keyExtractor={(item) => item.id}
               style={styles.commentList}
               renderItem={({ item }) => (
-                <View style={styles.commentItem}>
-                  <View style={styles.commentAvatar}>
-                    <Text style={styles.commentAvatarText}>
-                      {item.userDisplayName?.charAt(0).toUpperCase()}
-                    </Text>
+                <View>
+                  <View style={styles.commentItem}>
+                    <View style={styles.commentAvatar}>
+                      <Text style={styles.commentAvatarText}>
+                        {item.userDisplayName?.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.commentContent}>
+                      <Text style={styles.commentName}>{item.userDisplayName}</Text>
+                      <Text style={styles.commentText}>{item.text}</Text>
+                      <View style={styles.commentActionsRow}>
+                        <TouchableOpacity onPress={() => setReplyToAndPlaceholder(item.id)}>
+                          <Text style={styles.commentActionText}>Reply</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => toggleReplies(item.id)}>
+                          <Text style={styles.commentActionText}>
+                            {repliesVisible[item.id] ? 'Sembunyikan balasan' : `Lihat balasan (${item.repliesCount || 0})`}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.commentContent}>
-                    <Text style={styles.commentName}>{item.userDisplayName}</Text>
-                    <Text style={styles.commentText}>{item.text}</Text>
-                  </View>
+                  {repliesVisible[item.id] && (repliesMap[item.id] || []).map((reply) => (
+                    <View key={reply.id} style={[styles.commentItem, styles.replyItem]}>
+                      <View style={styles.commentAvatar}>
+                        <Text style={styles.commentAvatarText}>
+                          {reply.userDisplayName?.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.commentContent}>
+                        <Text style={styles.commentName}>{reply.userDisplayName}</Text>
+                        <Text style={styles.commentText}>{reply.text}</Text>
+                      </View>
+                    </View>
+                  ))}
                 </View>
               )}
               ListEmptyComponent={
@@ -685,10 +817,11 @@ export default function VideoFeedScreen({ navigation }: any) {
             <View style={styles.commentInputBox}>
               <TextInput
                 style={styles.commentInput}
-                placeholder="Tulis komentar..."
+                placeholder={replyTo ? (replyPlaceholder || 'Balas...') : 'Tulis komentar...'}
                 placeholderTextColor="#888"
-                value={commentText}
-                onChangeText={setCommentText}
+                value={replyTo ? replyText : commentText}
+                onChangeText={replyTo ? setReplyText : setCommentText}
+                multiline
               />
               <TouchableOpacity
                 style={styles.sendBtn}
@@ -754,6 +887,9 @@ const styles = StyleSheet.create({
   modalTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   commentList: { maxHeight: 300 },
   commentItem: { flexDirection: 'row', padding: 12, gap: 10 },
+  replyItem: { marginLeft: 36, backgroundColor: '#1b1b1b', borderRadius: 12, marginVertical: 4, paddingVertical: 8 },
+  commentActionsRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
+  commentActionText: { color: '#E91E63', fontSize: 12, fontWeight: '600' },
   commentAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#E91E63', justifyContent: 'center', alignItems: 'center' },
   commentAvatarText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
   commentContent: { flex: 1 },

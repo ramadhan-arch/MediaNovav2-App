@@ -74,6 +74,11 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
       await Share.share(shareOptions, {
         dialogTitle: 'Bagikan video MediaNova',
       });
+      try {
+        if (postId) await updateDoc(doc(db, 'posts', postId), { shareCount: increment(1) });
+      } catch (e) {
+        console.log('share count update failed', e);
+      }
     } catch (e) {
       console.log('Share failed', e);
       Alert.alert('Gagal', 'Tidak dapat membagikan video.');
@@ -377,12 +382,18 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Text overlay */}      {item?.textOverlay ? (        <View style={[
-          styles.overlayContainer,
-          item.textPosition === 'top' ? styles.overlayTop :
-          item.textPosition === 'center' ? styles.overlayCenter :
-          styles.overlayBottom
-        ]}>
+      {/* Text overlay */}
+      {item?.textOverlay ? (
+        <View
+          style={[
+            styles.overlayContainer,
+            item.textPosition === 'top'
+              ? styles.overlayTop
+              : item.textPosition === 'center'
+                ? styles.overlayCenter
+                : styles.overlayBottom,
+          ]}
+        >
           <Text style={[styles.overlayText, { color: item.textColor || '#fff' }]}>
             {item.textOverlay}
           </Text>

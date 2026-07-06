@@ -512,18 +512,18 @@ export default function FeedScreen({ navigation }: any) {
 
   // ----- Viewability: tentukan post mana yang lagi "aktif" (kelihatan) di layar -----
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 60, // dianggap aktif kalau minimal 60% post kelihatan
-    minimumViewTime: 150,
+    itemVisiblePercentThreshold: 40,
+    minimumViewTime: 100,
   }).current;
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0) {
-        // ambil item paling atas yang kelihatan sebagai yang "aktif"
         const topVisible = viewableItems[0];
-        setActivePostId(topVisible.item?.id ?? null);
+        const nextActiveId = topVisible.item?.id ?? null;
+        setActivePostId((prev) => (prev === nextActiveId ? prev : nextActiveId));
       } else {
-        setActivePostId(null);
+        setActivePostId((prev) => (prev === null ? prev : null));
       }
     }
   ).current;
@@ -534,6 +534,17 @@ export default function FeedScreen({ navigation }: any) {
     (postId: string) => postId === activePostId && isFocused && !commentModal,
     [activePostId, isFocused, commentModal]
   );
+
+  useEffect(() => {
+    if (!posts.length) {
+      setActivePostId(null);
+      return;
+    }
+
+    if (!activePostId || !posts.some((post) => post.id === activePostId)) {
+      setActivePostId(posts[0].id);
+    }
+  }, [posts, activePostId]);
 
   const renderPost = useCallback(({ item }: any) => {
     const isLikedByUser = currentUser?.likedPosts?.includes(item.id) ?? item.isLiked;
@@ -651,6 +662,7 @@ export default function FeedScreen({ navigation }: any) {
         initialNumToRender={5}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
+        extraData={activePostId}
         ListFooterComponent={
           loadingMore ? <ActivityIndicator color="#E91E63" style={{ padding: 16 }} /> : null
         }

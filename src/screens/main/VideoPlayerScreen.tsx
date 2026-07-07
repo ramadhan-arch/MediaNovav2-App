@@ -15,7 +15,7 @@ const { width, height } = Dimensions.get('window');
 export default function VideoPlayerScreen({ navigation, route }: any) {
   const { videoUrl, item } = route.params || {};
   const postId = item?.id || route.params?.postId || null;
-  const { currentUser } = useStore();
+  const { currentUser, isDarkMode } = useStore();
 
   const [commentModal, setCommentModal] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
@@ -206,10 +206,18 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
       const commentRef = doc(db, 'posts', postId, 'comments', commentId);
       if (isLiked) {
         await updateDoc(commentRef, { likedBy: arrayRemove(currentUser.uid), likesCount: increment(-1) });
-        setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, likesCount: (c.likesCount || 1) - 1, likedBy: (c.likedBy || []).filter((u: string) => u !== currentUser.uid) } : c));
+        setComments((prev) => prev.map((c) => {
+          if (c.id !== commentId) return c;
+          const nextLikedBy = (c.likedBy || []).filter((u: string) => u !== currentUser.uid);
+          return { ...c, likedBy: nextLikedBy, likesCount: nextLikedBy.length };
+        }));
       } else {
         await updateDoc(commentRef, { likedBy: arrayUnion(currentUser.uid), likesCount: increment(1) });
-        setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, likesCount: (c.likesCount || 0) + 1, likedBy: [...(c.likedBy || []), currentUser.uid] } : c));
+        setComments((prev) => prev.map((c) => {
+          if (c.id !== commentId) return c;
+          const nextLikedBy = [...(c.likedBy || []), currentUser.uid];
+          return { ...c, likedBy: nextLikedBy, likesCount: nextLikedBy.length };
+        }));
       }
     } catch (e) {
       console.log(e);
@@ -256,13 +264,30 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
   };
 
   const VIDEO_BOX_HEIGHT = Math.round(width * 16 / 9);
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    surface: '#111827',
+    card: '#1f2937',
+    border: '#334155',
+    text: '#f8fafc',
+    muted: '#cbd5e1',
+    subText: '#e2e8f0',
+  } : {
+    background: '#f8fafc',
+    surface: '#ffffff',
+    card: '#ffffff',
+    border: '#cbd5e1',
+    text: '#0f172a',
+    muted: '#475569',
+    subText: '#334155',
+  };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}> 
       <StatusBar hidden />
 
       {/* Video 9:16 */}
-      <View style={[styles.videoContainer, { height: VIDEO_BOX_HEIGHT }]}> 
+      <View style={[styles.videoContainer, { height: VIDEO_BOX_HEIGHT, backgroundColor: theme.background }]}> 
         <AutoVideoPlayer
           sourceUri={videoUrl || item?.mediaURL}
           shouldPlay={isFocused}
@@ -275,11 +300,11 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
       </View>
 
       {/* Header overlay */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: 'rgba(15, 23, 42, 0.55)' }]}> 
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={28} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.username}>@{item?.userDisplayName}</Text>
+        <Text style={[styles.username, { color: theme.text }]}>@{item?.userDisplayName}</Text>
         <View style={{ flex: 1 }} />
         <TouchableOpacity style={[styles.backBtn, { backgroundColor: 'rgba(0,0,0,0.3)' }]} onPress={handleShare}>
           <Ionicons name="share-social-outline" size={22} color="#fff" />
@@ -288,8 +313,15 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
 
       {/* Caption */}
       {item?.caption ? (
-        <View style={styles.captionBox}>
-          <Text style={styles.caption}>{item.caption}</Text>
+        <View style={[
+          styles.captionBox,
+          {
+            backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.82)' : 'rgba(255,255,255,0.95)',
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(15, 23, 42, 0.12)',
+            borderWidth: 1,
+          }
+        ]}> 
+          <Text style={[styles.caption, { color: theme.text }]}>{item.caption}</Text>
         </View>
       ) : null}
 
@@ -305,10 +337,10 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
         onRequestClose={closeComments}
       >
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Animated.View style={[styles.modalContainer, { transform: [{ translateY: pan }] }]} {...panResponder.panHandlers}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Komentar</Text>
+          <Animated.View style={[styles.modalContainer, { transform: [{ translateY: pan }], backgroundColor: theme.surface }]} {...panResponder.panHandlers}>
+            <View style={[styles.modalHandle, { backgroundColor: theme.muted }]} />
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}> 
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Komentar</Text>
               <TouchableOpacity onPress={closeComments}>
                 <Ionicons name="close" size={24} color="#888" />
               </TouchableOpacity>
@@ -327,18 +359,18 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
                       <Text style={styles.commentAvatarText}>{c.userDisplayName?.charAt(0)?.toUpperCase() || '?'}</Text>
                     </View>
                     <View style={styles.commentContent}>
-                      <Text style={styles.commentName}>{c.userDisplayName}</Text>
-                      <Text style={styles.commentText}>{c.text}</Text>
+                      <Text style={[styles.commentName, { color: theme.text }]}>{c.userDisplayName}</Text>
+                      <Text style={[styles.commentText, { color: theme.subText }]}>{c.text}</Text>
                       <View style={styles.commentActionsRow}>
                         <TouchableOpacity onPress={() => handleLikeComment(c.id)} style={styles.commentActionButton}>
                           <Ionicons name={(c.likedBy || []).includes(currentUser?.uid) ? 'heart' : 'heart-outline'} size={18} color={(c.likedBy || []).includes(currentUser?.uid) ? '#E91E63' : '#888'} />
                           <Text style={styles.commentActionText}>{c.likesCount || (c.likedBy ? c.likedBy.length : 0)}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => { setReplyToAndPlaceholder(c.id); }}>
-                          <Text style={styles.commentActionText}>Reply</Text>
+                          <Text style={[styles.commentActionText, { color: theme.muted }]}>Reply</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => toggleReplies(c.id)}>
-                          <Text style={styles.commentActionText}>{repliesVisible[c.id] ? 'Sembunyikan balasan' : `Lihat balasan (${c.repliesCount || 0})`}</Text>
+                          <Text style={[styles.commentActionText, { color: theme.muted }]}>{repliesVisible[c.id] ? 'Sembunyikan balasan' : `Lihat balasan (${c.repliesCount || 0})`}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -349,8 +381,8 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
                         <Text style={styles.commentAvatarText}>{r.userDisplayName?.charAt(0)?.toUpperCase() || '?'}</Text>
                       </View>
                       <View style={styles.commentContent}>
-                        <Text style={styles.commentName}>{r.userDisplayName}</Text>
-                        <Text style={styles.commentText}>{r.text}</Text>
+                        <Text style={[styles.commentName, { color: theme.text }]}>{r.userDisplayName}</Text>
+                        <Text style={[styles.commentText, { color: theme.subText }]}>{r.text}</Text>
                         <View style={styles.commentActionsRow}>
                           <TouchableOpacity onPress={() => handleLikeReply(c.id, r.id)} style={styles.commentActionButton}>
                             <Ionicons name={(r.likedBy || []).includes(currentUser?.uid) ? 'heart' : 'heart-outline'} size={16} color={(r.likedBy || []).includes(currentUser?.uid) ? '#E91E63' : '#888'} />
@@ -362,13 +394,13 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
                   ))}
                 </View>
               )}
-              ListEmptyComponent={<Text style={styles.noComments}>Belum ada komentar</Text>}
+              ListEmptyComponent={<Text style={[styles.noComments, { color: theme.muted }]}>Belum ada komentar</Text>}
             />
-            <View style={styles.commentInputBox}>
+            <View style={[styles.commentInputBox, { borderTopColor: theme.border }]}> 
               <TextInput
-                style={styles.commentInput}
+                style={[styles.commentInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
                 placeholder={replyTo ? (replyPlaceholder || 'Balas @...') : 'Tulis komentar...'}
-                placeholderTextColor="#888"
+                placeholderTextColor={theme.muted}
                 value={replyTo ? replyText : commentText}
                 onChangeText={replyTo ? setReplyText : setCommentText}
                 multiline
@@ -409,8 +441,16 @@ const styles = StyleSheet.create({
   header: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', padding: 16, paddingTop: 48, gap: 12, backgroundColor: 'rgba(0,0,0,0.4)' },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   username: { color: '#fff', fontWeight: 'bold', fontSize: 16, textShadowColor: '#000', textShadowRadius: 4 },
-  captionBox: { position: 'absolute', bottom: 60, left: 16, right: 16 },
-  caption: { color: '#fff', fontSize: 14, textShadowColor: '#000', textShadowRadius: 4 },
+  captionBox: {
+    position: 'absolute',
+    bottom: 60,
+    left: 16,
+    right: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  caption: { color: '#fff', fontSize: 14, fontWeight: '500', textAlign: 'left' },
   overlayContainer: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16 },
   overlayTop: { top: 100 },
   overlayCenter: { top: '45%' },

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   StyleProp,
   StyleSheet,
   Text,
@@ -9,6 +8,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { AVPlaybackStatus, Video } from 'expo-av';
+import { useStore } from '../store/useStore';
 
 type AutoVideoPlayerResizeMode = 'contain' | 'cover' | 'stretch';
 
@@ -33,6 +33,7 @@ export default function AutoVideoPlayer({
   posterSource,
   onStatusUpdate,
 }: AutoVideoPlayerProps) {
+  const { isDarkMode } = useStore();
   const videoRef = useRef<Video | null>(null);
   const shouldPlayRef = useRef(shouldPlay);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -40,7 +41,6 @@ export default function AutoVideoPlayer({
   const [retryKey, setRetryKey] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
 
-  const isLoading = shouldPlay && (!isLoaded || isBuffering);
 
   const resetErrorOnUriChange = useCallback(() => {
     setIsLoaded(false);
@@ -103,8 +103,10 @@ export default function AutoVideoPlayer({
     };
   }, []);
 
+  const containerBackground = isDarkMode ? '#0f172a' : '#f5f5f5';
+
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, { backgroundColor: containerBackground }, style]}>
       {sourceUri ? (
         <Video
           key={`${sourceUri}-${retryKey}`}
@@ -121,12 +123,6 @@ export default function AutoVideoPlayer({
         />
       ) : null}
 
-      {isLoading && (
-        <View style={styles.overlay} pointerEvents="none">
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
-      )}
-
       {playbackError && (
         <View style={styles.errorOverlay} pointerEvents="box-none">
           <Text style={styles.errorText}>Gagal memuat video</Text>
@@ -141,15 +137,9 @@ export default function AutoVideoPlayer({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#000',
+    backgroundColor: '#f5f5f5',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   errorOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import {
   doc, getDoc, updateDoc, addDoc, arrayUnion, arrayRemove,
-  increment, collection, query, where, orderBy, getDocs, serverTimestamp
+  increment, collection, query, where, serverTimestamp, onSnapshot
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../utils/firebase';
@@ -14,7 +14,7 @@ import { useStore } from '../../store/useStore';
 
 export default function UserProfileScreen({ route, navigation }: any) {
   const { userId } = route.params;
-  const { currentUser, updateCurrentUser } = useStore();
+  const { currentUser, updateCurrentUser, isDarkMode } = useStore();
   const [profileData, setProfileData] = useState<any>(null);
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -24,13 +24,54 @@ export default function UserProfileScreen({ route, navigation }: any) {
   const [profileTab, setProfileTab] = useState<'posts' | 'videos'>('posts');
 
   const isOwnProfile = userId === currentUser?.uid;
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    surface: '#111827',
+    card: '#1f2937',
+    border: '#334155',
+    text: '#f8fafc',
+    muted: '#cbd5e1',
+  } : {
+    background: '#f8fafc',
+    surface: '#ffffff',
+    card: '#ffffff',
+    border: '#cbd5e1',
+    text: '#0f172a',
+    muted: '#475569',
+  };
 
   useEffect(() => {
     if (userId) {
       fetchProfile();
-      fetchUserPosts();
     }
   }, [userId, currentUser?.uid]);
+
+  useEffect(() => {
+    if (!userId) {
+      setUserPosts([]);
+      return;
+    }
+
+    const q = query(collection(db, 'posts'), where('userId', '==', userId));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const posts = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a: any, b: any) => {
+          const aTime = a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : 0;
+          const bTime = b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : 0;
+          return bTime - aTime;
+        });
+      setUserPosts(posts);
+      setLoading(false);
+      setRefreshing(false);
+    }, (error) => {
+      console.log(error);
+      setLoading(false);
+      setRefreshing(false);
+    });
+
+    return () => unsubscribe();
+  }, [userId]);
 
   const fetchProfile = async () => {
     try {
@@ -50,29 +91,9 @@ export default function UserProfileScreen({ route, navigation }: any) {
     }
   };
 
-  const fetchUserPosts = async () => {
-    try {
-      const q = query(
-        collection(db, 'posts'),
-        where('userId', '==', userId)
-      );
-      const snap = await getDocs(q);
-      const posts = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a: any, b: any) => {
-          const aTime = a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : 0;
-          const bTime = b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : 0;
-          return bTime - aTime;
-        });
-      setUserPosts(posts);
-    } catch (e) {
-      console.log(e);
-    }
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchProfile(), fetchUserPosts()]);
+    await fetchProfile();
   };
 
   const handleFollow = async () => {
@@ -133,7 +154,7 @@ export default function UserProfileScreen({ route, navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}> 
         <ActivityIndicator size="large" color="#E91E63" />
       </View>
     );
@@ -141,7 +162,7 @@ export default function UserProfileScreen({ route, navigation }: any) {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.background }]}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -152,48 +173,48 @@ export default function UserProfileScreen({ route, navigation }: any) {
       }
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}> 
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{profileData?.displayName || 'Profil'}</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>{profileData?.displayName || 'Profil'}</Text>
         <View style={{ width: 24 }} />
       </View>
 
       {/* Profile info */}
-      <View style={styles.profileSection}>
+      <View style={[styles.profileSection, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}> 
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarText}>
             {profileData?.displayName?.charAt(0).toUpperCase() || '?'}
           </Text>
         </View>
 
-        <Text style={styles.displayName}>{profileData?.displayName}</Text>
+        <Text style={[styles.displayName, { color: theme.text }]}>{profileData?.displayName}</Text>
 
         {profileData?.bio ? (
-          <Text style={styles.bio}>{profileData.bio}</Text>
+          <Text style={[styles.bio, { color: theme.muted }]}>{profileData.bio}</Text>
         ) : null}
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{userPosts.length}</Text>
-            <Text style={styles.statLabel}>Post</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{userPosts.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>Post</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
           <TouchableOpacity
             style={styles.statItem}
             onPress={() => navigation.navigate('FollowList', { userId, listType: 'followers' })}
           >
-            <Text style={styles.statNumber}>{profileData?.followersCount || 0}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{profileData?.followersCount || 0}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>Followers</Text>
           </TouchableOpacity>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
           <TouchableOpacity
             style={styles.statItem}
             onPress={() => navigation.navigate('FollowList', { userId, listType: 'following' })}
           >
-            <Text style={styles.statNumber}>{profileData?.followingCount || 0}</Text>
-            <Text style={styles.statLabel}>Following</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{profileData?.followingCount || 0}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>Following</Text>
           </TouchableOpacity>
         </View>
 
@@ -214,33 +235,33 @@ export default function UserProfileScreen({ route, navigation }: any) {
       </View>
 
       {/* Posts grid */}
-      <View style={styles.profileTabs}>
-        <TouchableOpacity style={[styles.profileTab, profileTab === 'posts' && styles.profileTabActive]} onPress={() => setProfileTab('posts')}>
-          <Text style={[styles.profileTabText, profileTab === 'posts' && styles.profileTabTextActive]}>Posts</Text>
+      <View style={[styles.profileTabs, { backgroundColor: theme.background }]}> 
+        <TouchableOpacity style={[styles.profileTab, profileTab === 'posts' && styles.profileTabActive, { backgroundColor: profileTab === 'posts' ? '#E91E63' : theme.card }]} onPress={() => setProfileTab('posts')}>
+          <Text style={[styles.profileTabText, { color: profileTab === 'posts' ? '#fff' : theme.muted }]}>Posts</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.profileTab, profileTab === 'videos' && styles.profileTabActive]} onPress={() => setProfileTab('videos')}>
-          <Text style={[styles.profileTabText, profileTab === 'videos' && styles.profileTabTextActive]}>Videos</Text>
+        <TouchableOpacity style={[styles.profileTab, profileTab === 'videos' && styles.profileTabActive, { backgroundColor: profileTab === 'videos' ? '#E91E63' : theme.card }]} onPress={() => setProfileTab('videos')}>
+          <Text style={[styles.profileTabText, { color: profileTab === 'videos' ? '#fff' : theme.muted }]}>Videos</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.postsGrid}>
+      <View style={[styles.postsGrid, { backgroundColor: theme.background }]}> 
         {userPosts.filter((post) => profileTab === 'videos' ? post.mediaType === 'video' : true).map(post => (
           <TouchableOpacity key={post.id} style={styles.gridItem} onPress={() => navigation.navigate('PostDetail', { post } as any)}>
             {post.mediaURL && post.mediaType === 'image' ? (
               <Image source={{ uri: post.mediaURL }} style={styles.gridImage} resizeMode="contain" />
             ) : post.mediaType === 'video' ? (
-              <View style={styles.gridVideoBox}>
+              <View style={[styles.gridVideoBox, { backgroundColor: theme.card }]}> 
                 {post.thumbnailURL && (
                   <Image source={{ uri: post.thumbnailURL }} style={styles.gridImage} resizeMode="contain" />
                 )}
                 <Ionicons name="play-circle" size={32} color="#E91E63" />
               </View>
             ) : post.mediaType === 'audio' ? (
-              <View style={styles.gridAudioBox}>
+              <View style={[styles.gridAudioBox, { backgroundColor: theme.card }]}> 
                 <Ionicons name="musical-notes" size={32} color="#E91E63" />
               </View>
             ) : (
-              <View style={styles.gridTextBox}>
-                <Text style={styles.gridTextCaption} numberOfLines={3}>
+              <View style={[styles.gridTextBox, { backgroundColor: theme.card }]}> 
+                <Text style={[styles.gridTextCaption, { color: theme.text }]} numberOfLines={3}>
                   {post.caption}
                 </Text>
               </View>
@@ -251,7 +272,7 @@ export default function UserProfileScreen({ route, navigation }: any) {
 
       {userPosts.length === 0 && (
         <View style={styles.emptyPosts}>
-          <Text style={styles.emptyText}>Belum ada post</Text>
+          <Text style={[styles.emptyText, { color: theme.muted }]}>Belum ada post</Text>
         </View>
       )}
     </ScrollView>

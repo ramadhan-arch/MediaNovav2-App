@@ -17,7 +17,7 @@ const TEXT_COLORS = ['#ffffff', '#000000', '#E91E63', '#ff0000', '#00ff00', '#00
 const TEXT_POSITIONS = ['top', 'center', 'bottom'];
 
 export default function CreatePostScreen({ navigation, route }: any) {
-  const { currentUser, addPost } = useStore();
+  const { currentUser, addPost, isDarkMode } = useStore();
   const [caption, setCaption] = useState('');
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video' | 'audio'>('image');
@@ -33,6 +33,26 @@ export default function CreatePostScreen({ navigation, route }: any) {
   const [textColor, setTextColor] = useState('#ffffff');
   const [textPosition, setTextPosition] = useState('bottom');
   const [savedOverlayText, setSavedOverlayText] = useState('');
+
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    surface: '#111827',
+    border: '#374151',
+    text: '#f9fafb',
+    muted: '#9ca3af',
+    input: '#1f2937',
+    inputText: '#f9fafb',
+    card: '#1f2937',
+  } : {
+    background: '#f7f8fb',
+    surface: '#ffffff',
+    border: '#e5e7eb',
+    text: '#111827',
+    muted: '#6b7280',
+    input: '#ffffff',
+    inputText: '#111827',
+    card: '#ffffff',
+  };
 
   // Video player untuk preview
   const player = useVideoPlayer(
@@ -181,45 +201,45 @@ export default function CreatePostScreen({ navigation, route }: any) {
 };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Buat Post</Text>
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}> 
+      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}> 
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Buat Post</Text>
       </View>
 
       {/* Media buttons */}
       <View style={styles.mediaButtons}>
-        <TouchableOpacity style={styles.mediaBtn} onPress={pickImage}>
-          <Ionicons name="image-outline" size={26} color="#fff" />
-          <Text style={styles.mediaBtnText}>Foto</Text>
+        <TouchableOpacity style={[styles.mediaBtn, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={pickImage}>
+          <Ionicons name="image-outline" size={26} color={theme.text} />
+          <Text style={[styles.mediaBtnText, { color: theme.text }]}>Foto</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.mediaBtn} onPress={pickVideo}>
-          <Ionicons name="videocam-outline" size={26} color="#fff" />
-          <Text style={styles.mediaBtnText}>Video</Text>
+        <TouchableOpacity style={[styles.mediaBtn, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={pickVideo}>
+          <Ionicons name="videocam-outline" size={26} color={theme.text} />
+          <Text style={[styles.mediaBtnText, { color: theme.text }]}>Video</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.mediaBtn}
+          style={[styles.mediaBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
           onPress={() => navigation.navigate('VideoRecord')}
         >
           <Ionicons name="radio-button-on-outline" size={26} color="#E91E63" />
-          <Text style={styles.mediaBtnText}>Rekam</Text>
+          <Text style={[styles.mediaBtnText, { color: theme.text }]}>Rekam</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.mediaBtn}
           onPress={() => navigation.navigate('AudioRecord')}
         >
-          <Ionicons name="mic-outline" size={26} color="#fff" />
-          <Text style={styles.mediaBtnText}>Audio</Text>
+          <Ionicons name="mic-outline" size={26} color={theme.text} />
+          <Text style={[styles.mediaBtnText, { color: theme.text }]}>Audio</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.mediaBtn}
           onPress={() => navigation.navigate('CameraFilter', { reopenFromCreatePost: true })}
         >
-          <Ionicons name="color-filter-outline" size={26} color="#fff" />
-          <Text style={styles.mediaBtnText}>Filter</Text>
+          <Ionicons name="color-filter-outline" size={26} color={theme.text} />
+          <Text style={[styles.mediaBtnText, { color: theme.text }]}>Filter</Text>
         </TouchableOpacity>
       </View>
 
@@ -324,9 +344,9 @@ export default function CreatePostScreen({ navigation, route }: any) {
       {/* Caption */}
       <View style={styles.captionBox}>
         <TextInput
-          style={styles.captionInput}
+          style={[styles.captionInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.inputText }]}
           placeholder="Tulis caption..."
-          placeholderTextColor="#888"
+          placeholderTextColor={theme.muted}
           value={caption}
           onChangeText={setCaption}
           multiline
@@ -337,9 +357,9 @@ export default function CreatePostScreen({ navigation, route }: any) {
 
       {/* Upload progress */}
       {loading && (
-        <View style={styles.progressBox}>
-          <Text style={styles.progressText}>Mengupload... {Math.min(100, uploadProgress)}%</Text>
-          <View style={styles.progressBar}>
+        <View style={styles.progressBox}> 
+          <Text style={[styles.progressText, { color: theme.text }]}>Mengupload... {Math.min(100, uploadProgress)}%</Text>
+          <View style={[styles.progressBar, { backgroundColor: theme.border }]}> 
             <View style={[styles.progressFill, { width: `${Math.min(100, uploadProgress)}%` }]} />
           </View>
         </View>
@@ -430,7 +450,7 @@ export default function CreatePostScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1 },
   header: {
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
     paddingHorizontal: 16,
@@ -438,10 +458,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#222'
   },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold' },
   mediaButtons: { flexDirection: 'row', justifyContent: 'space-around', padding: 12, flexWrap: 'wrap', gap: 8 },
-  mediaBtn: { alignItems: 'center', backgroundColor: '#111', padding: 12, borderRadius: 12, width: 62, borderWidth: 1, borderColor: '#333' },
-  mediaBtnText: { color: '#fff', fontSize: 10, marginTop: 4 },
+  mediaBtn: { alignItems: 'center', padding: 12, borderRadius: 12, width: 62, borderWidth: 1 },
+  mediaBtnText: { fontSize: 10, marginTop: 4 },
   previewBox: { margin: 12, borderRadius: 12, overflow: 'hidden', backgroundColor: '#111' },
   imageWrapper: { position: 'relative', width: '100%', aspectRatio: 1, backgroundColor: '#000', overflow: 'hidden' },
   previewImage: { width: '100%', height: '100%', backgroundColor: '#000' },

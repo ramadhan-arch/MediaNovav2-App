@@ -8,6 +8,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { collection, getDocs } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../utils/firebase';
+import { useStore } from '../../store/useStore';
 
 interface SearchUser {
   id: string;
@@ -42,10 +43,31 @@ interface SearchSection {
 }
 
 export default function SearchScreen({ navigation }: any) {
+  const { isDarkMode } = useStore();
   const [searchText, setSearchText] = useState('');
   const [userResults, setUserResults] = useState<SearchUser[]>([]);
   const [postResults, setPostResults] = useState<SearchPost[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    surface: '#111827',
+    border: '#374151',
+    text: '#f9fafb',
+    muted: '#9ca3af',
+    input: '#1f2937',
+    inputText: '#f9fafb',
+    card: '#1f2937',
+  } : {
+    background: '#f7f8fb',
+    surface: '#ffffff',
+    border: '#e5e7eb',
+    text: '#111827',
+    muted: '#6b7280',
+    input: '#ffffff',
+    inputText: '#111827',
+    card: '#ffffff',
+  };
 
   const handleSearch = async (text: string) => {
     setSearchText(text);
@@ -113,8 +135,8 @@ export default function SearchScreen({ navigation }: any) {
         </Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.displayName}>{item.displayName || item.username || 'User'}</Text>
-        <Text style={styles.email}>{item.username ? `@${item.username}` : item.email}</Text>
+        <Text style={[styles.displayName, { color: theme.text }]}>{item.displayName || item.username || 'User'}</Text>
+        <Text style={[styles.email, { color: theme.muted }]}>{item.username ? `@${item.username}` : item.email}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -124,7 +146,7 @@ export default function SearchScreen({ navigation }: any) {
 
     return (
       <TouchableOpacity
-        style={styles.postItem}
+        style={[styles.postItem, { borderBottomColor: theme.border }]}
         onPress={() => navigation.navigate('PostDetail', { post: item })}
       >
         {/* Thumbnail */}
@@ -145,7 +167,7 @@ export default function SearchScreen({ navigation }: any) {
 
         {/* Post info */}
         <View style={styles.postInfo}>
-          <Text style={styles.postCaption} numberOfLines={2}>
+          <Text style={[styles.postCaption, { color: theme.text }]} numberOfLines={2}>
             {item.caption || 'No caption'}
           </Text>
           <View style={styles.postMeta}>
@@ -154,7 +176,7 @@ export default function SearchScreen({ navigation }: any) {
             </Text>
             <View style={styles.postStats}>
               <Ionicons name="heart" size={14} color="#E91E63" />
-              <Text style={styles.statsText}>{item.likesCount || 0}</Text>
+              <Text style={[styles.statsText, { color: theme.muted }]}>{item.likesCount || 0}</Text>
             </View>
           </View>
         </View>
@@ -169,17 +191,17 @@ export default function SearchScreen({ navigation }: any) {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Cari</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}> 
+      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}> 
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Cari</Text>
       </View>
 
-      <View style={styles.searchBox}>
-        <Ionicons name="search-outline" size={20} color="#888" style={styles.searchIcon} />
+      <View style={[styles.searchBox, { backgroundColor: theme.surface, borderColor: theme.border }]}> 
+        <Ionicons name="search-outline" size={20} color={theme.muted} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: theme.inputText }]}
           placeholder="Cari username atau konten..."
-          placeholderTextColor="#888"
+          placeholderTextColor={theme.muted}
           value={searchText}
           onChangeText={handleSearch}
         />
@@ -201,13 +223,13 @@ export default function SearchScreen({ navigation }: any) {
         />
       ) : searchText.length > 0 && !loading ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="search-outline" size={48} color="#444" />
-          <Text style={styles.emptyText}>Hasil tidak ditemukan</Text>
+          <Ionicons name="search-outline" size={48} color={theme.muted} />
+          <Text style={[styles.emptyText, { color: theme.muted }]}>Hasil tidak ditemukan</Text>
         </View>
       ) : searchText.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="search-outline" size={48} color="#444" />
-          <Text style={styles.emptyText}>Mulai mengetik untuk mencari</Text>
+          <Ionicons name="search-outline" size={48} color={theme.muted} />
+          <Text style={[styles.emptyText, { color: theme.muted }]}>Mulai mengetik untuk mencari</Text>
         </View>
       ) : null}
     </View>
@@ -215,33 +237,29 @@ export default function SearchScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1 },
   header: {
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 48,
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
   },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold' },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     margin: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#111',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#333',
   },
   searchIcon: { marginRight: 8 },
   searchInput: {
     flex: 1,
     padding: 12,
-    color: '#fff',
     fontSize: 16,
   },
-  sectionHeader: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#050505' },
+  sectionHeader: { paddingHorizontal: 16, paddingVertical: 12 },
   sectionTitle: { color: '#E91E63', fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase' },
   // User item styles
   userItem: {
@@ -250,7 +268,6 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#111',
   },
   avatar: {
     width: 44,
@@ -261,14 +278,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
-  displayName: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  email: { color: '#888', fontSize: 12, marginTop: 2 },
+  displayName: { fontWeight: '600', fontSize: 14 },
+  email: { fontSize: 12, marginTop: 2 },
   // Post item styles
   postItem: {
     flexDirection: 'row',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#111',
     gap: 12,
   },
   postThumbnail: {
@@ -291,16 +307,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   postInfo: { flex: 1, justifyContent: 'space-between' },
-  postCaption: { color: '#fff', fontSize: 14, fontWeight: '500', marginBottom: 8 },
+  postCaption: { fontSize: 14, fontWeight: '500', marginBottom: 8 },
   postMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  postUser: { color: '#888', fontSize: 12 },
+  postUser: { fontSize: 12 },
   postStats: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statsText: { color: '#888', fontSize: 12 },
+  statsText: { fontSize: 12 },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
   },
-  emptyText: { color: '#888', fontSize: 16, marginTop: 12, textAlign: 'center' },
+  emptyText: { fontSize: 16, marginTop: 12, textAlign: 'center' },
 });

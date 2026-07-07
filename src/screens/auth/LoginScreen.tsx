@@ -3,13 +3,35 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../utils/firebase';
+import { useStore } from '../../store/useStore';
 
 export default function LoginScreen({ navigation }: any) {
+  const { isDarkMode } = useStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    card: '#111827',
+    border: '#374151',
+    text: '#f9fafb',
+    muted: '#9ca3af',
+    input: '#1f2937',
+    inputText: '#f9fafb',
+  } : {
+    background: '#f7f8fb',
+    card: '#ffffff',
+    border: '#e5e7eb',
+    text: '#111827',
+    muted: '#6b7280',
+    input: '#ffffff',
+    inputText: '#111827',
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -28,31 +50,36 @@ export default function LoginScreen({ navigation }: any) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.inner}>
-        <Text style={styles.logo}>🎬 MediaNova</Text>
-        <Text style={styles.subtitle}>Share your world</Text>
+      <View style={[styles.inner, { backgroundColor: theme.background }]}> 
+        <Text style={[styles.logo, { color: theme.text }]}>🎬 MediaNova</Text>
+        <Text style={[styles.subtitle, { color: theme.muted }]}>Share your world</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme.input, borderColor: theme.border, color: theme.inputText }]}
           placeholder="Email"
-          placeholderTextColor="#888"
+          placeholderTextColor={theme.muted}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#888"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        <View style={[styles.passwordBox, { backgroundColor: theme.input, borderColor: theme.border }]}> 
+          <TextInput
+            style={[styles.passwordInput, { color: theme.inputText }]}
+            placeholder="Password"
+            placeholderTextColor={theme.muted}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={theme.muted} />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.loginBtn}
@@ -66,11 +93,11 @@ export default function LoginScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-          <Text style={styles.forgotText}>Lupa password?</Text>
+          <Text style={[styles.forgotText, { color: theme.muted }]}>Lupa password?</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.registerText}>
+          <Text style={[styles.registerText, { color: theme.muted }]}> 
             Belum punya akun? <Text style={styles.registerLink}>Daftar</Text>
           </Text>
         </TouchableOpacity>
@@ -80,19 +107,29 @@ export default function LoginScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1 },
   inner: { flex: 1, justifyContent: 'center', padding: 24 },
-  logo: { fontSize: 36, fontWeight: 'bold', color: '#fff', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#888', textAlign: 'center', marginBottom: 40 },
+  logo: { fontSize: 36, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 40 },
   input: {
-    backgroundColor: '#111',
     borderWidth: 1,
-    borderColor: '#333',
     borderRadius: 12,
     padding: 16,
-    color: '#fff',
     fontSize: 16,
     marginBottom: 16,
+  },
+  passwordBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 16,
+    fontSize: 16,
   },
   loginBtn: {
     backgroundColor: '#E91E63',
@@ -102,7 +139,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   loginText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  forgotText: { color: '#888', textAlign: 'center', marginBottom: 24 },
-  registerText: { color: '#888', textAlign: 'center' },
+  forgotText: { textAlign: 'center', marginBottom: 24 },
+  registerText: { textAlign: 'center' },
   registerLink: { color: '#E91E63', fontWeight: 'bold' },
 });

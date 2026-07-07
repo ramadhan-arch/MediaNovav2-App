@@ -21,7 +21,7 @@ import { useStore } from '../../store/useStore';
 const initialWindow = Dimensions.get('window');
 
 // Komponen per item video
-const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, onShare, containerHeight, videoHeight, videoWidth, videoTopOffset, bottomOffset }: any) => {
+const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, onShare, containerHeight, videoHeight, videoWidth, videoTopOffset, bottomOffset, theme }: any) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -82,9 +82,9 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
   }, []);
 
     return (
-    <View style={[styles.videoContainer, { height: containerHeight, width: videoWidth, justifyContent: 'center' }]}> 
+    <View style={[styles.videoContainer, { height: containerHeight, width: videoWidth, justifyContent: 'center', backgroundColor: theme?.background || '#000' }]}> 
       {item.mediaURL ? (
-          <View style={[styles.fullscreenVideoWrapper, { height: videoHeight, marginTop: -(videoTopOffset || 0) }]}> 
+          <View style={[styles.fullscreenVideoWrapper, { height: videoHeight, marginTop: -(videoTopOffset || 0), backgroundColor: theme?.background || '#000' }]}> 
             <AutoVideoPlayer
               sourceUri={item.mediaURL}
               shouldPlay={shouldPlay}
@@ -124,8 +124,8 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
           </Animated.View>
         </View>
       ) : (
-        <View style={[styles.fullscreenNoVideo, { height: videoHeight }]}> 
-          <Text style={styles.noVideoText}>🎬</Text>
+        <View style={[styles.fullscreenNoVideo, { height: videoHeight, backgroundColor: theme?.card || '#111' }]}> 
+          <Text style={[styles.noVideoText, { color: theme?.text || '#fff' }]}>🎬</Text>
         </View>
       )}
 
@@ -187,8 +187,8 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
               </View>
             )}
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.videoUsername}>@{item.userDisplayName}</Text>
-              <Text style={styles.videoCaption} numberOfLines={2}>
+              <Text style={[styles.videoUsername, { color: theme.text }]}>@{item.userDisplayName}</Text>
+              <Text style={[styles.videoCaption, { color: theme.subText }]} numberOfLines={2}>
                 {item.caption}
               </Text>
             </View>
@@ -200,7 +200,7 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
 });
 
 export default function VideoFeedScreen({ navigation }: any) {
-  const { currentUser, updateCurrentUser } = useStore();
+  const { currentUser, updateCurrentUser, isDarkMode } = useStore();
   const [activeIndex, setActiveIndex] = useState(0);
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,6 +217,32 @@ export default function VideoFeedScreen({ navigation }: any) {
   const [replyPlaceholder, setReplyPlaceholder] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [screenSize, setScreenSize] = useState(initialWindow);
+  const submitInProgressRef = useRef(false);
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    surface: '#111827',
+    card: '#1f2937',
+    border: '#374151',
+    text: '#f9fafb',
+    subText: '#d1d5db',
+    muted: '#9ca3af',
+    icon: '#f9fafb',
+    modal: '#111827',
+    input: '#374151',
+    inputText: '#f9fafb',
+  } : {
+    background: '#f7f8fb',
+    surface: '#ffffff',
+    card: '#ffffff',
+    border: '#e5e7eb',
+    text: '#111827',
+    subText: '#4b5563',
+    muted: '#6b7280',
+    icon: '#111827',
+    modal: '#ffffff',
+    input: '#f3f4f6',
+    inputText: '#111827',
+  };
 
   useEffect(() => {
     const onChange = ({ window }: any) => setScreenSize(window);
@@ -276,7 +302,8 @@ export default function VideoFeedScreen({ navigation }: any) {
   );
 
   const fetchVideos = useCallback(async (refresh = false) => {
-    const currentVisibleId = videos[activeIndex]?.id;
+    const previousActiveId = videos[activeIndex]?.id;
+    const previousFirstId = videos[0]?.id;
     if (refresh) setRefreshing(true);
     else setLoading(true);
     try {
@@ -307,17 +334,18 @@ export default function VideoFeedScreen({ navigation }: any) {
         filteredVideos = allVideos;
       }
       setVideos(filteredVideos);
-      // Try to preserve currently visible video after refresh to avoid jumpiness
-      if (refresh && currentVisibleId) {
-        const newIndex = filteredVideos.findIndex(v => v.id === currentVisibleId);
-        if (newIndex >= 0) {
-          setActiveIndex(newIndex);
-          try { listRef.current?.scrollToIndex({ index: newIndex, animated: false }); } catch (e) {}
-        } else {
-          // if current video disappeared, keep user near top
-          try { listRef.current?.scrollToIndex({ index: 0, animated: false }); } catch (e) {}
-          setActiveIndex(0);
-        }
+      if (refresh && filteredVideos.length > 0) {
+        setActiveIndex(0);
+        try {
+          requestAnimationFrame(() => {
+            listRef.current?.scrollToIndex({ index: 0, animated: true });
+          });
+        } catch (e) {}
+      } else if (previousActiveId) {
+        const preservedIndex = filteredVideos.findIndex((video) => video.id === previousActiveId);
+        const nextIndex = preservedIndex >= 0 ? preservedIndex : 0;
+        setActiveIndex(nextIndex);
+        try { listRef.current?.scrollToIndex({ index: nextIndex, animated: false }); } catch (e) {}
       }
     } catch (e) {
       console.log(e);
@@ -469,8 +497,11 @@ export default function VideoFeedScreen({ navigation }: any) {
   }, [comments]);
 
   const handleComment = useCallback(async () => {
+    if (submitInProgressRef.current) return;
+
     if (replyTo) {
       if (!replyText.trim()) return;
+      submitInProgressRef.current = true;
       setCommentLoading(true);
       try {
         const replyData = {
@@ -494,12 +525,14 @@ export default function VideoFeedScreen({ navigation }: any) {
       } catch (e) {
         Alert.alert('Error', 'Gagal kirim balasan');
       } finally {
+        submitInProgressRef.current = false;
         setCommentLoading(false);
       }
       return;
     }
 
     if (!commentText.trim()) return;
+    submitInProgressRef.current = true;
     setCommentLoading(true);
     try {
       const commentData = {
@@ -518,6 +551,7 @@ export default function VideoFeedScreen({ navigation }: any) {
     } catch (e) {
       Alert.alert('Error', 'Gagal kirim komentar');
     } finally {
+      submitInProgressRef.current = false;
       setCommentLoading(false);
     }
   }, [commentText, replyText, replyTo, currentUser, selectedPostId]);
@@ -629,6 +663,7 @@ export default function VideoFeedScreen({ navigation }: any) {
         isActive={index === activeIndex && isFocused}
         isLikedByUser={isLikedByUser}
         onLike={handleLike}
+        theme={theme}
         onComment={openComments}
         onSave={handleSave}
         onShare={handleShare}
@@ -641,43 +676,35 @@ export default function VideoFeedScreen({ navigation }: any) {
     );
   }, [activeIndex, isFocused, handleLike, openComments, handleSave]);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E91E63" />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}> 
       <StatusBar hidden />
       <View style={[styles.modeTabs, { top: STATUS_BAR_HEIGHT + 8, backgroundColor: 'transparent' }]}>
         <TouchableOpacity
           style={[styles.modeTab, feedMode === 'forYou' && styles.modeTabActive]}
           onPress={() => setFeedMode('forYou')}
         >
-          <Text style={[styles.modeTabText, feedMode === 'forYou' && styles.modeTabTextActive]}>For You</Text>
+          <Text style={[styles.modeTabText, feedMode === 'forYou' && styles.modeTabTextActive, { color: feedMode === 'forYou' ? theme.text : theme.muted }]}>For You</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modeTab, feedMode === 'following' && styles.modeTabActive]}
           onPress={() => setFeedMode('following')}
         >
-          <Text style={[styles.modeTabText, feedMode === 'following' && styles.modeTabTextActive]}>Following</Text>
+          <Text style={[styles.modeTabText, feedMode === 'following' && styles.modeTabTextActive, { color: feedMode === 'following' ? theme.text : theme.muted }]}>Following</Text>
         </TouchableOpacity>
       </View>
 
       {videos.length === 0 ? (
         <View style={styles.emptyContent}>
-          <Text style={styles.emptyIcon}>🎬</Text>
-          <Text style={styles.emptyLabel}>
+          <Text style={[styles.emptyIcon, { color: theme.text }]}>🎬</Text>
+          <Text style={[styles.emptyLabel, { color: theme.text }]}> 
             {feedMode === 'following' && !currentUser?.following?.length
               ? 'Ikuti creator untuk melihat feed Following'
               : 'Belum ada video'}
           </Text>
           {feedMode !== 'following' && (
             <>
-              <Text style={styles.emptySubLabel}>Upload video pertama kamu!</Text>
+              <Text style={[styles.emptySubLabel, { color: theme.muted }]}>Upload video pertama kamu!</Text>
               <TouchableOpacity
                 style={styles.uploadBtn}
                 onPress={() => navigation.navigate('CreatePost')}
@@ -740,9 +767,9 @@ export default function VideoFeedScreen({ navigation }: any) {
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Komentar</Text>
+          <View style={[styles.modalContainer, { backgroundColor: theme.modal }]}> 
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}> 
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Komentar</Text>
               <TouchableOpacity onPress={closeComments}>
                 <Ionicons name="close" size={24} color="#888" />
               </TouchableOpacity>
@@ -760,8 +787,8 @@ export default function VideoFeedScreen({ navigation }: any) {
                       </Text>
                     </View>
                     <View style={styles.commentContent}>
-                      <Text style={styles.commentName}>{item.userDisplayName}</Text>
-                      <Text style={styles.commentText}>{item.text}</Text>
+                      <Text style={[styles.commentName, { color: theme.text }]}>{item.userDisplayName}</Text>
+                      <Text style={[styles.commentText, { color: theme.subText }]}>{item.text}</Text>
                       <View style={styles.commentActionsRow}>
                         <TouchableOpacity onPress={() => setReplyToAndPlaceholder(item.id)}>
                           <Text style={styles.commentActionText}>Reply</Text>
@@ -775,29 +802,29 @@ export default function VideoFeedScreen({ navigation }: any) {
                     </View>
                   </View>
                   {repliesVisible[item.id] && (repliesMap[item.id] || []).map((reply) => (
-                    <View key={reply.id} style={[styles.commentItem, styles.replyItem]}>
+                    <View key={reply.id} style={[styles.commentItem, styles.replyItem, { backgroundColor: theme.card }]}> 
                       <View style={styles.commentAvatar}>
                         <Text style={styles.commentAvatarText}>
                           {reply.userDisplayName?.charAt(0).toUpperCase()}
                         </Text>
                       </View>
                       <View style={styles.commentContent}>
-                        <Text style={styles.commentName}>{reply.userDisplayName}</Text>
-                        <Text style={styles.commentText}>{reply.text}</Text>
+                        <Text style={[styles.commentName, { color: theme.text }]}>{reply.userDisplayName}</Text>
+                        <Text style={[styles.commentText, { color: theme.subText }]}>{reply.text}</Text>
                       </View>
                     </View>
                   ))}
                 </View>
               )}
               ListEmptyComponent={
-                <Text style={styles.noComments}>Belum ada komentar</Text>
+                <Text style={[styles.noComments, { color: theme.muted }]}>Belum ada komentar</Text>
               }
             />
-            <View style={styles.commentInputBox}>
+            <View style={[styles.commentInputBox, { borderTopColor: theme.border }]}> 
               <TextInput
-                style={styles.commentInput}
+                style={[styles.commentInput, { backgroundColor: theme.input, color: theme.inputText }]}
                 placeholder={replyTo ? (replyPlaceholder || 'Balas...') : 'Tulis komentar...'}
-                placeholderTextColor="#888"
+                placeholderTextColor={theme.muted}
                 value={replyTo ? replyText : commentText}
                 onChangeText={replyTo ? setReplyText : setCommentText}
                 multiline
@@ -839,13 +866,13 @@ const styles = StyleSheet.create({
   emptySubLabel: { color: '#888', fontSize: 14, marginBottom: 24 },
   uploadBtn: { backgroundColor: '#E91E63', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
   uploadBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  videoContainer: { backgroundColor: '#000', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  videoWrapper: { justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden' },
-  fullscreenVideoWrapper: { width: '100%', justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden' },
+  videoContainer: { overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  videoWrapper: { justifyContent: 'center', overflow: 'hidden' },
+  fullscreenVideoWrapper: { width: '100%', justifyContent: 'center', overflow: 'hidden' },
   fullscreenVideo: { width: '100%' },
-  fullscreenNoVideo: { width: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  fullscreenNoVideo: { width: '100%', justifyContent: 'center', alignItems: 'center' },
   pauseOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
-  noVideo: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  noVideo: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
   noVideoText: { fontSize: 80 },
   progressBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.2)' },
   progressBarFill: { height: 3, backgroundColor: '#E91E63' },
@@ -861,12 +888,12 @@ const styles = StyleSheet.create({
   avatarSmallPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E91E63', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#fff' },
   avatarSmallText: { color: '#fff', fontWeight: 'bold' },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalContainer: { backgroundColor: '#111', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' },
+  modalContainer: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },
   modalTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   commentList: { maxHeight: 300 },
   commentItem: { flexDirection: 'row', padding: 12, gap: 10 },
-  replyItem: { marginLeft: 36, backgroundColor: '#1b1b1b', borderRadius: 12, marginVertical: 4, paddingVertical: 8 },
+  replyItem: { marginLeft: 36, borderRadius: 12, marginVertical: 4, paddingVertical: 8 },
   commentActionsRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
   commentActionText: { color: '#E91E63', fontSize: 12, fontWeight: '600' },
   commentAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#E91E63', justifyContent: 'center', alignItems: 'center' },
@@ -876,7 +903,7 @@ const styles = StyleSheet.create({
   commentText: { color: '#aaa', fontSize: 14 },
   noComments: { color: '#888', textAlign: 'center', padding: 20 },
   commentInputBox: { flexDirection: 'row', padding: 12, gap: 10, borderTopWidth: 1, borderTopColor: '#222' },
-  commentInput: { flex: 1, backgroundColor: '#222', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, color: '#fff' },
+  commentInput: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, color: '#fff' },
   sendBtn: { backgroundColor: '#E91E63', borderRadius: 20, width: 40, justifyContent: 'center', alignItems: 'center' },
 });
 // Hindari re-render yang tidak perlu: hanya re-render saat prop penting berubah

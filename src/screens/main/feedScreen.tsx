@@ -40,6 +40,7 @@ const PostItem = memo(function PostItem({
   isActive,
   isMuted,
   isOwner,
+  theme,
   onToggleMute,
   onOpenUserProfile,
   onOpenVideoFullscreen,
@@ -82,7 +83,7 @@ const PostItem = memo(function PostItem({
 
   useEffect(() => () => clearTimeout(singleTapTimeout.current), []);
   return (
-    <View style={styles.postCard}>
+    <View style={[styles.postCard, { backgroundColor: theme.card, borderBottomColor: theme.border }]}> 
       {/* Header */}
       <TouchableOpacity style={styles.postHeader} onPress={onOpenUserProfile}>
         <View style={styles.avatar}>
@@ -91,8 +92,8 @@ const PostItem = memo(function PostItem({
           </Text>
         </View>
         <View>
-          <Text style={styles.username}>{item.userDisplayName}</Text>
-          <Text style={styles.postTime}>
+          <Text style={[styles.username, { color: theme.text }]}>{item.userDisplayName}</Text>
+          <Text style={[styles.postTime, { color: theme.muted }]}> 
             {item.createdAt?.toDate?.()?.toLocaleDateString('id-ID') || ''}
           </Text>
         </View>
@@ -192,33 +193,33 @@ const PostItem = memo(function PostItem({
           <Ionicons
             name={isLikedByUser ? 'heart' : 'heart-outline'}
             size={24}
-            color={isLikedByUser ? '#E91E63' : '#fff'}
+            color={isLikedByUser ? '#E91E63' : theme.icon}
           />
-          <Text style={styles.actionCount}>{item.likesCount || 0}</Text>
+          <Text style={[styles.actionCount, { color: theme.text }]}>{item.likesCount || 0}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn} onPress={onOpenComments}>
-          <Ionicons name="chatbubble-outline" size={22} color="#fff" />
-          <Text style={styles.actionCount}>{item.commentsCount || 0}</Text>
+          <Ionicons name="chatbubble-outline" size={22} color={theme.icon} />
+          <Text style={[styles.actionCount, { color: theme.text }]}>{item.commentsCount || 0}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => onShare && onShare()}>
-          <Ionicons name="share-social-outline" size={22} color="#fff" />
-          <Text style={styles.actionCount}>{item.shareCount || 0}</Text>
+          <Ionicons name="share-social-outline" size={22} color={theme.icon} />
+          <Text style={[styles.actionCount, { color: theme.text }]}>{item.shareCount || 0}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => onSave(item.id)}>
-          <Ionicons name={item.isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={item.isSaved ? '#E91E63' : '#fff'} />
+          <Ionicons name={item.isSaved ? 'bookmark' : 'bookmark-outline'} size={22} color={item.isSaved ? '#E91E63' : theme.icon} />
         </TouchableOpacity>
         {isOwner && (
           <TouchableOpacity style={styles.actionBtn} onPress={() => onDelete && onDelete()}>
-            <Ionicons name="trash-outline" size={22} color="#fff" />
+            <Ionicons name="trash-outline" size={22} color={theme.icon} />
           </TouchableOpacity>
         )}
       </View>
 
       {/* Caption */}
       {item.caption ? (
-        <Text style={styles.caption}>
-          <Text style={styles.captionName}>{item.userDisplayName} </Text>
+        <Text style={[styles.caption, { color: theme.subText }]}> 
+          <Text style={[styles.captionName, { color: theme.text }]}>{item.userDisplayName} </Text>
           {item.caption}
         </Text>
       ) : null}
@@ -227,7 +228,7 @@ const PostItem = memo(function PostItem({
 }, arePostPropsEqual);
 
 export default function FeedScreen({ navigation }: any) {
-  const { posts, setPosts, currentUser, updateCurrentUser } = useStore();
+  const { posts, setPosts, currentUser, updateCurrentUser, isDarkMode } = useStore();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const listRef = useRef<any>(null);
@@ -245,6 +246,31 @@ export default function FeedScreen({ navigation }: any) {
   const [replyText, setReplyText] = useState('');
   const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
   const followingKey = currentUser?.following?.join(',') || '';
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    surface: '#111827',
+    card: '#1f2937',
+    border: '#374151',
+    text: '#f9fafb',
+    subText: '#d1d5db',
+    muted: '#9ca3af',
+    icon: '#f9fafb',
+    modal: '#111827',
+    input: '#374151',
+    inputText: '#f9fafb',
+  } : {
+    background: '#f7f8fb',
+    surface: '#ffffff',
+    card: '#ffffff',
+    border: '#e5e7eb',
+    text: '#111827',
+    subText: '#4b5563',
+    muted: '#6b7280',
+    icon: '#111827',
+    modal: '#ffffff',
+    input: '#f3f4f6',
+    inputText: '#111827',
+  };
 
   // ----- Autoplay / autopause state -----
   const [activePostId, setActivePostId] = useState<string | null>(null);
@@ -501,10 +527,18 @@ export default function FeedScreen({ navigation }: any) {
       const commentRef = doc(db, 'posts', selectedPostId, 'comments', commentId);
       if (isLiked) {
         await updateDoc(commentRef, { likedBy: arrayRemove(currentUser.uid), likesCount: increment(-1) });
-        setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, likesCount: (c.likesCount || 1) - 1, likedBy: (c.likedBy || []).filter((u: string) => u !== currentUser.uid) } : c));
+        setComments((prev) => prev.map((c) => {
+          if (c.id !== commentId) return c;
+          const nextLikedBy = (c.likedBy || []).filter((u: string) => u !== currentUser.uid);
+          return { ...c, likedBy: nextLikedBy, likesCount: nextLikedBy.length };
+        }));
       } else {
         await updateDoc(commentRef, { likedBy: arrayUnion(currentUser.uid), likesCount: increment(1) });
-        setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, likesCount: (c.likesCount || 0) + 1, likedBy: [...(c.likedBy || []), currentUser.uid] } : c));
+        setComments((prev) => prev.map((c) => {
+          if (c.id !== commentId) return c;
+          const nextLikedBy = [...(c.likedBy || []), currentUser.uid];
+          return { ...c, likedBy: nextLikedBy, likesCount: nextLikedBy.length };
+        }));
       }
     } catch (e) { console.log(e); }
   };
@@ -581,6 +615,7 @@ export default function FeedScreen({ navigation }: any) {
     return (
       <PostItem
         item={item}
+        theme={theme}
         isLikedByUser={isLikedByUser}
         isActive={isPostActive(item.id)}
         isMuted={isMuted}
@@ -634,21 +669,13 @@ export default function FeedScreen({ navigation }: any) {
     );
   };
 
-  if (loading && posts.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E91E63" />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>🎬 MediaNova</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}> 
+      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}> 
+        <Text style={[styles.headerTitle, { color: theme.text }]}>🎬 MediaNova</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
           <View style={{ position: 'relative' }}>
-            <Ionicons name="notifications-outline" size={24} color="#fff" />
+            <Ionicons name="notifications-outline" size={24} color={theme.icon} />
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationCount}>3</Text>
             </View>
@@ -656,18 +683,18 @@ export default function FeedScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.modeTabs}>
+      <View style={[styles.modeTabs, { backgroundColor: theme.surface }]}> 
         <TouchableOpacity
           style={[styles.modeTab, feedMode === 'forYou' && styles.modeTabActive]}
           onPress={() => setFeedMode('forYou')}
         >
-          <Text style={[styles.modeTabText, feedMode === 'forYou' && styles.modeTabTextActive]}>For You</Text>
+          <Text style={[styles.modeTabText, feedMode === 'forYou' && styles.modeTabTextActive, { color: feedMode === 'forYou' ? theme.text : theme.muted }]}>For You</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modeTab, feedMode === 'following' && styles.modeTabActive]}
           onPress={() => setFeedMode('following')}
         >
-          <Text style={[styles.modeTabText, feedMode === 'following' && styles.modeTabTextActive]}>Following</Text>
+          <Text style={[styles.modeTabText, feedMode === 'following' && styles.modeTabTextActive, { color: feedMode === 'following' ? theme.text : theme.muted }]}>Following</Text>
         </TouchableOpacity>
       </View>
 
@@ -697,7 +724,7 @@ export default function FeedScreen({ navigation }: any) {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.muted }]}> 
               {feedMode === 'following' && (!currentUser?.following?.length)
                 ? 'Ikuti creator untuk melihat feed Following'
                 : 'Belum ada post 🎬'}
@@ -717,9 +744,9 @@ export default function FeedScreen({ navigation }: any) {
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Komentar</Text>
+          <View style={[styles.modalContainer, { backgroundColor: theme.modal }]}> 
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}> 
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Komentar</Text>
               <TouchableOpacity onPress={() => setCommentModal(false)}>
                 <Ionicons name="close" size={24} color="#888" />
               </TouchableOpacity>
@@ -739,18 +766,14 @@ export default function FeedScreen({ navigation }: any) {
                       </Text>
                     </View>
                     <View style={styles.commentContent}>
-                      <Text style={styles.commentName}>{item.userDisplayName}</Text>
-                      <Text style={styles.commentText}>{item.text}</Text>
+                      <Text style={[styles.commentName, { color: theme.text }]}>{item.userDisplayName}</Text>
+                      <Text style={[styles.commentText, { color: theme.subText }]}>{item.text}</Text>
                       <View style={{ flexDirection: 'row', marginTop: 6, gap: 12, alignItems: 'center' }}>
-                        <TouchableOpacity onPress={() => handleLikeComment(item.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Ionicons name={(item.likedBy || []).includes(currentUser?.uid) ? 'heart' : 'heart-outline'} size={18} color={(item.likedBy || []).includes(currentUser?.uid) ? '#E91E63' : '#888'} />
-                          <Text style={{ color: '#888', marginLeft: 6 }}>{item.likesCount || (item.likedBy ? (item.likedBy.length) : 0)}</Text>
-                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => { setReplyTo(item.id); setReplyText(''); }}>
-                          <Text style={{ color: '#888' }}>Reply</Text>
+                          <Text style={{ color: theme.muted }}>Reply</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => toggleReplies(item.id)}>
-                          <Text style={{ color: '#888' }}>{repliesVisible[item.id] ? 'Sembunyikan balasan' : `Lihat balasan (${item.repliesCount || 0})`}</Text>
+                          <Text style={{ color: theme.muted }}>{repliesVisible[item.id] ? 'Sembunyikan balasan' : `Lihat balasan (${item.repliesCount || 0})`}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -761,22 +784,22 @@ export default function FeedScreen({ navigation }: any) {
                         <Text style={styles.commentAvatarText}>{r.userDisplayName?.charAt(0).toUpperCase()}</Text>
                       </View>
                       <View style={styles.commentContent}>
-                        <Text style={styles.commentName}>{r.userDisplayName}</Text>
-                        <Text style={styles.commentText}>{r.text}</Text>
+                        <Text style={[styles.commentName, { color: theme.text }]}>{r.userDisplayName}</Text>
+                        <Text style={[styles.commentText, { color: theme.subText }]}>{r.text}</Text>
                       </View>
                     </View>
                   ))}
                 </View>
               )}
               ListEmptyComponent={
-                <Text style={styles.noComments}>Belum ada komentar</Text>
+                <Text style={[styles.noComments, { color: theme.muted }]}>Belum ada komentar</Text>
               }
             />
             <View style={styles.commentInputBox}>
               <TextInput
-                style={styles.commentInput}
+                style={[styles.commentInput, { backgroundColor: theme.input, color: theme.inputText }]}
                 placeholder={replyTo ? 'Balas @...' : 'Tulis komentar...'}
-                placeholderTextColor="#888"
+                placeholderTextColor={theme.muted}
                 value={replyTo ? replyText : commentText}
                 onChangeText={replyTo ? setReplyText : setCommentText}
                 multiline

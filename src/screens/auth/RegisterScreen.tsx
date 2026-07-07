@@ -3,16 +3,39 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../utils/firebase';
+import { useStore } from '../../store/useStore';
 
 export default function RegisterScreen({ navigation }: any) {
+  const { isDarkMode } = useStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const theme = isDarkMode ? {
+    background: '#0f172a',
+    card: '#111827',
+    border: '#374151',
+    text: '#f9fafb',
+    muted: '#9ca3af',
+    input: '#1f2937',
+    inputText: '#f9fafb',
+  } : {
+    background: '#f7f8fb',
+    card: '#ffffff',
+    border: '#e5e7eb',
+    text: '#111827',
+    muted: '#6b7280',
+    input: '#ffffff',
+    inputText: '#111827',
+  };
 
   const handleRegister = async () => {
     if (!name || !email || !password || !confirmPassword) {
@@ -50,45 +73,55 @@ export default function RegisterScreen({ navigation }: any) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.inner}>
-        <Text style={styles.logo}>🎬 MediaNova</Text>
-        <Text style={styles.subtitle}>Buat akun baru</Text>
+      <ScrollView contentContainerStyle={[styles.inner, { backgroundColor: theme.background }]}> 
+        <Text style={[styles.logo, { color: theme.text }]}>🎬 MediaNova</Text>
+        <Text style={[styles.subtitle, { color: theme.muted }]}>Buat akun baru</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme.input, borderColor: theme.border, color: theme.inputText }]}
           placeholder="Nama lengkap"
-          placeholderTextColor="#888"
+          placeholderTextColor={theme.muted}
           value={name}
           onChangeText={setName}
         />
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme.input, borderColor: theme.border, color: theme.inputText }]}
           placeholder="Email"
-          placeholderTextColor="#888"
+          placeholderTextColor={theme.muted}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#888"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Konfirmasi Password"
-          placeholderTextColor="#888"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-        />
+        <View style={[styles.passwordBox, { backgroundColor: theme.input, borderColor: theme.border }]}> 
+          <TextInput
+            style={[styles.passwordInput, { color: theme.inputText }]}
+            placeholder="Password"
+            placeholderTextColor={theme.muted}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={theme.muted} />
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.passwordBox, { backgroundColor: theme.input, borderColor: theme.border }]}> 
+          <TextInput
+            style={[styles.passwordInput, { color: theme.inputText }]}
+            placeholder="Konfirmasi Password"
+            placeholderTextColor={theme.muted}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry={!showConfirmPassword}
+          />
+          <TouchableOpacity onPress={() => setShowConfirmPassword((prev) => !prev)}>
+            <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={theme.muted} />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.registerBtn}
@@ -102,7 +135,7 @@ export default function RegisterScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.loginText}>
+          <Text style={[styles.loginText, { color: theme.muted }]}> 
             Sudah punya akun? <Text style={styles.loginLink}>Login</Text>
           </Text>
         </TouchableOpacity>
@@ -112,19 +145,29 @@ export default function RegisterScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1 },
   inner: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  logo: { fontSize: 36, fontWeight: 'bold', color: '#fff', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#888', textAlign: 'center', marginBottom: 40 },
+  logo: { fontSize: 36, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 40 },
   input: {
-    backgroundColor: '#111',
     borderWidth: 1,
-    borderColor: '#333',
     borderRadius: 12,
     padding: 16,
-    color: '#fff',
     fontSize: 16,
     marginBottom: 16,
+  },
+  passwordBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 16,
+    fontSize: 16,
   },
   registerBtn: {
     backgroundColor: '#E91E63',
@@ -134,6 +177,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   registerText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  loginText: { color: '#888', textAlign: 'center' },
+  loginText: { textAlign: 'center' },
   loginLink: { color: '#E91E63', fontWeight: 'bold' },
 });

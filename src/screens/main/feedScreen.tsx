@@ -13,13 +13,25 @@ import {
   startAfter, QueryDocumentSnapshot, arrayUnion, arrayRemove, deleteDoc
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
 import { db } from '../../utils/firebase';
 import { useStore } from '../../store/useStore';
 import AudioPlayer from '../../components/AudioPlayer';
+import AutoVideoPlayer from '../../components/AutoVideoPlayer';
 
 const POSTS_PER_PAGE = 10; // Batasi 10 post per load biar ga OOM
+
+const arePostPropsEqual = (prev: any, next: any) => (
+  prev.item.id === next.item.id &&
+  prev.item.mediaURL === next.item.mediaURL &&
+  prev.item.thumbnailURL === next.item.thumbnailURL &&
+  prev.item.caption === next.item.caption &&
+  prev.item.isLiked === next.item.isLiked &&
+  prev.item.isSaved === next.item.isSaved &&
+  prev.isActive === next.isActive &&
+  prev.isMuted === next.isMuted &&
+  prev.isOwner === next.isOwner
+);
 
 // ----- Post item dipisah jadi komponen sendiri + memo, biar video lain ga ikut re-render -----
 const PostItem = memo(function PostItem({
@@ -118,15 +130,30 @@ const PostItem = memo(function PostItem({
             />
           )}
 
-          <Video
-            source={{ uri: item.mediaURL }}
-            style={styles.videoPlayer}
-            resizeMode={ResizeMode.CONTAIN}
+          <AutoVideoPlayer
+            sourceUri={item.mediaURL}
             shouldPlay={isActive}
-            isLooping
             isMuted={isMuted}
-            useNativeControls={false}
+            resizeMode="contain"
+            style={styles.videoPlayer}
+            posterSource={item.thumbnailURL ? { uri: item.thumbnailURL } : undefined}
           />
+
+          {item.textOverlay ? (
+            <View
+              style={[
+                styles.overlayContainer,
+                item.textPosition === 'top' ? styles.overlayTop :
+                item.textPosition === 'center' ? styles.overlayCenter :
+                styles.overlayBottom
+              ]}
+              pointerEvents="none"
+            >
+              <Text style={[styles.overlayText, { color: item.textColor || '#fff' }]}>
+                {item.textOverlay}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Indikator play/pause halus saat tidak aktif */}
           {!isActive && (
@@ -197,7 +224,7 @@ const PostItem = memo(function PostItem({
       ) : null}
     </View>
   );
-});
+}, arePostPropsEqual);
 
 export default function FeedScreen({ navigation }: any) {
   const { posts, setPosts, currentUser, updateCurrentUser } = useStore();
@@ -223,6 +250,7 @@ export default function FeedScreen({ navigation }: any) {
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(true); // default muted, ala TikTok/Reels
   const isFocused = useIsFocused(); // pause semua video kalau screen ga lagi difokus
+  const [loadedPostIds, setLoadedPostIds] = useState<string[]>([]);
 
   const applyFeedMode = useCallback((items: any[]) => {
     if (feedMode === 'following') {
@@ -512,8 +540,9 @@ export default function FeedScreen({ navigation }: any) {
 
   // ----- Viewability: tentukan post mana yang lagi "aktif" (kelihatan) di layar -----
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 40,
-    minimumViewTime: 100,
+    viewAreaCoveragePercentThreshold: 70,
+    minimumViewTime: 200,
+    waitForInteraction: false,
   }).current;
 
   const onViewableItemsChanged = useRef(
@@ -541,8 +570,8 @@ export default function FeedScreen({ navigation }: any) {
       return;
     }
 
-    if (!activePostId || !posts.some((post) => post.id === activePostId)) {
-      setActivePostId(posts[0].id);
+    if (activePostId && !posts.some((post) => post.id === activePostId)) {
+      setActivePostId(null);
     }
   }, [posts, activePostId]);
 
@@ -656,7 +685,7 @@ export default function FeedScreen({ navigation }: any) {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
-        removeClippedSubviews={true}
+        removeClippedSubviews={false}
         maxToRenderPerBatch={5}
         windowSize={5}
         initialNumToRender={5}
@@ -798,8 +827,8 @@ const styles = StyleSheet.create({
   overlayText: { fontSize: 20, fontWeight: 'bold', textShadowColor: '#000', textShadowRadius: 6, textAlign: 'center' },
   // Video 9:16 container, keep original aspect ratio inside
   videoContainer: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#000', position: 'relative', overflow: 'hidden' },
-  videoThumbnail: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1, backgroundColor: '#000' },
-  videoPlayer: { width: '100%', height: '100%', backgroundColor: '#000' },
+  videoThumbnail: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0, backgroundColor: '#000' },
+  videoPlayer: { width: '100%', height: '100%', backgroundColor: '#000', zIndex: 2, elevation: 2 },
   videoPauseOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)',

@@ -6,7 +6,7 @@ import {
   Alert, StatusBar, RefreshControl, Image, Animated,
   Share
 } from 'react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import AutoVideoPlayer from '../../components/AutoVideoPlayer';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -24,50 +24,19 @@ const initialWindow = Dimensions.get('window');
 const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment, onSave, onShare, containerHeight, videoHeight, videoWidth, videoTopOffset, bottomOffset }: any) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
-  const progressInterval = useRef<any>(null);
+  const [isBuffering, setIsBuffering] = useState(false);
 
-  const player = useVideoPlayer(item.mediaURL || null, (p) => {
-    p.loop = true;
-  });
+  const shouldPlay = isActive && !isPaused;
 
-  // Play/pause saat jadi active atau tidak
-  useEffect(() => {
-    if (isActive && item.mediaURL) {
-      if (!isPaused) player.play();
-    } else {
-      player.pause();
+  const handlePlaybackStatus = useCallback((status: any) => {
+    if (status.isLoaded && status.durationMillis > 0) {
+      setProgress(status.positionMillis / status.durationMillis);
     }
-    return () => {
-      clearInterval(progressInterval.current);
-    };
-  }, [isActive]);
-
-  // Update progress bar setiap 500ms
-  useEffect(() => {
-    if (isActive && !isPaused) {
-      progressInterval.current = setInterval(() => {
-        try {
-          const duration = player.duration;
-          const current = player.currentTime;
-          if (duration > 0) {
-            setProgress(current / duration);
-          }
-        } catch (e) {}
-      }, 500);
-    } else {
-      clearInterval(progressInterval.current);
-    }
-    return () => clearInterval(progressInterval.current);
-  }, [isActive, isPaused]);
+    setIsBuffering(status.isBuffering);
+  }, []);
 
   const togglePause = () => {
-    if (isPaused) {
-      player.play();
-      setIsPaused(false);
-    } else {
-      player.pause();
-      setIsPaused(true);
-    }
+    setIsPaused((prev) => !prev);
   };
 
   // Double-tap to like: detect quick successive taps
@@ -116,11 +85,15 @@ const VideoItem = React.memo(({ item, isActive, isLikedByUser, onLike, onComment
     <View style={[styles.videoContainer, { height: containerHeight, width: videoWidth, justifyContent: 'center' }]}> 
       {item.mediaURL ? (
           <View style={[styles.fullscreenVideoWrapper, { height: videoHeight, marginTop: -(videoTopOffset || 0) }]}> 
-            <VideoView
-              player={player}
+            <AutoVideoPlayer
+              sourceUri={item.mediaURL}
+              shouldPlay={shouldPlay}
+              isMuted={false}
+              resizeMode="contain"
               style={{ width: '100%', height: videoHeight }}
-              contentFit="contain"
               nativeControls={false}
+              posterSource={item.thumbnailURL ? { uri: item.thumbnailURL } : undefined}
+              onStatusUpdate={handlePlaybackStatus}
             />
             {/* Transparent overlay to capture taps reliably (single + double tap) */}
             <View
@@ -628,6 +601,12 @@ export default function VideoFeedScreen({ navigation }: any) {
     try { listRef.current?.scrollToIndex({ index, animated: true }); } catch (err) {}
   }, [activeIndex]);
 
+  const viewabilityConfig = useRef({
+    viewAreaCoveragePercentThreshold: 70,
+    minimumViewTime: 200,
+    waitForInteraction: false,
+  }).current;
+
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0) {
@@ -736,12 +715,12 @@ export default function VideoFeedScreen({ navigation }: any) {
           showsVerticalScrollIndicator={false}
           decelerationRate="fast"
           onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
+          viewabilityConfig={viewabilityConfig}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
           windowSize={3}
           updateCellsBatchingPeriod={50}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           getItemLayout={(_, index) => ({
             length: ITEM_HEIGHT,
             offset: ITEM_HEIGHT * index,

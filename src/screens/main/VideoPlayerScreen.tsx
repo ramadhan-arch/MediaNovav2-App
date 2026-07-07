@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions, StatusBar, Share, Alert,
   Modal, KeyboardAvoidingView, Platform, FlatList, TextInput, ActivityIndicator, PanResponder, Animated
 } from 'react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import AutoVideoPlayer from '../../components/AutoVideoPlayer';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { collection, query, orderBy, limit, addDoc, updateDoc, serverTimestamp, onSnapshot, doc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
@@ -41,17 +41,13 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
     }
   })).current;
 
-  const player = useVideoPlayer(videoUrl || null, (p) => {
-    p.loop = true;
-    p.play();
-  });
+  const [isFocused, setIsFocused] = useState(false);
 
-  // Stop video saat pindah screen
   useFocusEffect(
     React.useCallback(() => {
-      if (videoUrl) player.play();
+      setIsFocused(true);
       return () => {
-        player.pause();
+        setIsFocused(false);
       };
     }, [])
   );
@@ -267,11 +263,14 @@ export default function VideoPlayerScreen({ navigation, route }: any) {
 
       {/* Video 9:16 */}
       <View style={[styles.videoContainer, { height: VIDEO_BOX_HEIGHT }]}> 
-        <VideoView
-          player={player}
+        <AutoVideoPlayer
+          sourceUri={videoUrl || item?.mediaURL}
+          shouldPlay={isFocused}
+          isMuted={false}
+          resizeMode="contain"
           style={styles.video}
-          contentFit="contain"
           nativeControls={true}
+          posterSource={item?.thumbnailURL ? { uri: item?.thumbnailURL } : undefined}
         />
       </View>
 
